@@ -542,4 +542,533 @@
             client.name = newClientName.trim();
             client.phone = newClientPhone.trim();
 
-            save
+            saveState();
+            renderApp();
+            alert("Paramètres du véhicule et du client mis à jour avec succès !");
+        }
+
+        function renderVehicleDetailView() {
+            const v = appState.vehicles.find(item => item.id === selectedVehicleId);
+            if(!v) return `<p class="text-center text-slate-400">Véhicule introuvable.</p>`;
+            const client = appState.clients.find(c => c.id === v.clientId) || {};
+            const passages = appState.passages.filter(p => p.vehicleId === v.id);
+            const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+
+            return `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <button onclick="switchView('home')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                            <i class="fa-solid fa-arrow-left mr-2"></i> Retour à l'accueil
+                        </button>
+                        <button onclick="editVehicleAndClientParams(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-pen-to-square"></i> Modifier Paramètres / KM
+                        </button>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
+                                <span class="text-lg">${countryMeta.flag}</span>
+                                <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
+                            </div>
+                            <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white">${v.model}</h3>
+                            <p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-user mr-1"></i> ${client.name} — <i class="fa-solid fa-phone ml-2 mr-1"></i> ${client.phone}</p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-800 flex space-x-2">
+                            <button onclick="quickInvoiceForVehicle(${v.id})" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition shadow-md shadow-blue-600/20 flex items-center justify-center">
+                                <i class="fa-solid fa-cash-register mr-2"></i> Encaisser Prestation / Produit
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique Prestations & Ventes</h4>
+                        ${passages.length === 0 ? `<p class="text-xs text-slate-400 text-center py-6">Aucun historique.</p>` : passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-slate-400"><i class="fa-solid fa-calendar mr-1"></i> ${p.date}</span>
+                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    ${p.items.map(i => `<span class="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] px-2 py-0.5 rounded-lg">${i}</span>`).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- VUE CLIENTS ---
+        function renderClientsView() {
+            return `
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white">Répertoire Clients (${appState.clients.length})</h3>
+                        <button onclick="openNewClientModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-2 rounded-xl transition">
+                            <i class="fa-solid fa-user-plus mr-1"></i> Nouveau
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        ${appState.clients.map(c => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h4 class="text-sm font-bold text-white">${c.name}</h4>
+                                        <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i> ${c.phone}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-xs font-bold text-emerald-400">${c.totalSpent.toLocaleString()} DA</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- FACTURATION (SERVICES VS PRODUITS & DÉDUCTION STOCK) ---
+        let billingCart = [];
+        let billingVehicleId = null;
+
+        function quickInvoiceForVehicle(vehId) {
+            billingVehicleId = vehId;
+            billingCart = [];
+            appState.currentView = 'billing';
+            renderApp();
+        }
+
+        function renderBillingView() {
+            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+            const servicesList = appState.catalog.filter(i => i.type === 'SERVICE');
+            const productsList = appState.catalog.filter(i => i.type === 'PRODUCT');
+
+            return `
+                <div class="space-y-4 pb-6">
+                    <h3 class="text-sm font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-cash-register text-blue-500 mr-2"></i> Caisse & Facturation
+                    </h3>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-medium text-slate-400">Véhicule concerné</label>
+                        <select id="billing-veh-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
+                            ${appState.vehicles.map(v => `<option value="${v.id}" ${billingVehicleId === v.id ? 'selected' : ''}>${v.plate} - ${v.model}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <!-- SERVICES -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-blue-400 uppercase"><i class="fa-solid fa-screwdriver-wrench mr-1"></i> Services (Lavage & Main d'œuvre)</h4>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${servicesList.map(item => `
+                                <div class="flex justify-between items-center bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
+                                    <div>
+                                        <span class="text-xs font-medium text-white block">${item.name}</span>
+                                        <span class="text-[10px] text-blue-400 font-bold">${item.price.toLocaleString()} DA</span>
+                                    </div>
+                                    <button onclick="addToBillingCart(${item.id})" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition border border-blue-500/30">
+                                        <i class="fa-solid fa-plus"></i> Ajouter
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- PRODUITS / PIÈCES -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-amber-400 uppercase"><i class="fa-solid fa-box mr-1"></i> Produits / Pièces (Déstockage auto)</h4>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${productsList.map(item => `
+                                <div class="flex justify-between items-center bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
+                                    <div>
+                                        <span class="text-xs font-medium text-white block">${item.name}</span>
+                                        <span class="text-[10px] text-amber-400 font-bold">${item.price.toLocaleString()} DA • Stock: <strong class="text-emerald-400">${item.stock}</strong></span>
+                                    </div>
+                                    <button onclick="addToBillingCart(${item.id})" class="bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition border border-amber-500/30">
+                                        <i class="fa-solid fa-plus"></i> Ajouter
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- PANIER -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Panier en cours</h4>
+                        ${billingCart.length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">Aucun article dans le panier</p>` : `
+                            <div class="space-y-2">
+                                ${billingCart.map((item, idx) => `
+                                    <div class="flex justify-between items-center text-xs bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                                        <div>
+                                            <span class="text-slate-200 block font-medium">${item.name}</span>
+                                            <span class="text-[10px] text-slate-400">Qté : ${item.qty} (${item.type === 'PRODUCT' ? 'Produit' : 'Service'})</span>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <span class="font-bold text-white">${(item.price * item.qty).toLocaleString()} DA</span>
+                                            <button onclick="removeFromBillingCart(${idx})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-sm font-bold">
+                                <span class="text-white">Total à payer :</span>
+                                <span class="text-emerald-400 text-base">${total.toLocaleString()} DA</span>
+                            </div>
+                            <button onclick="validateBilling()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition text-xs shadow-lg shadow-emerald-600/20">
+                                Valider & Encaisser
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function addToBillingCart(catalogId) {
+            const item = appState.catalog.find(c => c.id === catalogId);
+            if(!item) return;
+            if(item.type === 'PRODUCT' && item.stock <= 0) {
+                alert("Stock épuisé pour ce produit !");
+                return;
+            }
+            const existing = billingCart.find(i => i.id === catalogId);
+            if(existing) {
+                if(item.type === 'PRODUCT' && existing.qty >= item.stock) {
+                    alert("Stock insuffisant pour ajouter davantage de cet article.");
+                    return;
+                }
+                existing.qty++;
+            } else {
+                billingCart.push({ ...item, qty: 1 });
+            }
+            renderApp();
+        }
+
+        function removeFromBillingCart(index) {
+            billingCart.splice(index, 1);
+            renderApp();
+        }
+
+        function validateBilling() {
+            if(billingCart.length === 0) return;
+            const vehId = parseInt(document.getElementById('billing-veh-select').value);
+            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+            // Déduire le stock des produits vendus
+            billingCart.forEach(cartItem => {
+                if(cartItem.type === 'PRODUCT') {
+                    const catItem = appState.catalog.find(c => c.id === cartItem.id);
+                    if(catItem) {
+                        catItem.stock = Math.max(0, catItem.stock - cartItem.qty);
+                    }
+                }
+            });
+
+            appState.passages.unshift({
+                id: appState.passages.length + 1,
+                vehicleId: vehId,
+                date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                totalAmount: total,
+                items: billingCart.map(i => `${i.name} (x${i.qty})`)
+            });
+
+            const vehicle = appState.vehicles.find(v => v.id === vehId);
+            if(vehicle) {
+                const client = appState.clients.find(c => c.id === vehicle.clientId);
+                if(client) client.totalSpent = (client.totalSpent || 0) + total;
+            }
+
+            saveState();
+            billingCart = [];
+            alert("Encaissement validé et stocks mis à jour avec succès !");
+            switchView('journal');
+        }
+
+        // --- JOURNAL ---
+        function renderJournalView() {
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white">Journal des Encaissements</h3>
+                    <div class="space-y-3">
+                        ${appState.passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-blue-400 font-mono font-bold">Passage #${p.id}</span>
+                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
+                                </div>
+                                <div class="text-xs text-slate-300">
+                                    ${p.items.join(', ')}
+                                </div>
+                                <div class="text-[10px] text-slate-500 text-right">${p.date}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- ADMIN : ÉQUIPE, SERVICES & PRODUITS ---
+        function renderAdminView() {
+            if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
+            return `
+                <div class="space-y-4 pb-6">
+                    <h3 class="text-sm font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-shield-halved text-amber-500 mr-2"></i> Espace Administrateur
+                    </h3>
+                    <div class="flex space-x-2 border-b border-slate-800 pb-2">
+                        <button onclick="setAdminTab('users')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='users'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Équipe</button>
+                        <button onclick="setAdminTab('catalog')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='catalog'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Services & Produits</button>
+                    </div>
+                    ${appState.adminTab === 'users' ? renderUsersAdminSection() : renderCatalogAdminSection()}
+                </div>
+            `;
+        }
+
+        function setAdminTab(tab) { appState.adminTab = tab; renderApp(); }
+
+        // --- GESTION ÉQUIPE (MODIFIER, AJOUTER, SUPPRIMER, ACTIVER/DÉSACTIVER) ---
+        function renderUsersAdminSection() {
+            return `
+                <div class="space-y-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un nouveau membre d'équipe</h4>
+                        <form onsubmit="addNewUser(event)" class="space-y-3">
+                            <input type="text" id="new-user-name" required placeholder="Nom complet (ex: Anis B.)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="new-user-username" required placeholder="Identifiant (ex: anis)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                <input type="password" id="new-user-pin" required placeholder="Code PIN (ex: 3333)" maxlength="6" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white tracking-widest">
+                            </div>
+                            <select id="new-user-role" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                <option value="cashier">Caissier</option>
+                                <option value="washer">Lavagiste / Mécano</option>
+                                <option value="admin">Administrateur</option>
+                            </select>
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition">Créer le compte</button>
+                        </form>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Membres de l'équipe existants</h4>
+                        ${appState.users.map(u => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h5 class="text-xs font-bold text-white">${u.name}</h5>
+                                        <p class="text-[10px] text-slate-400">Identifiant : <span class="text-slate-200 font-mono">${u.username}</span> • Rôle : <span class="text-blue-400">${u.role}</span></p>
+                                    </div>
+                                    <div class="flex items-center space-x-1">
+                                        <button onclick="toggleUserStatus(${u.id})" class="text-[10px] px-2.5 py-1 rounded-lg border font-medium transition ${u.active ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}">
+                                            ${u.active ? 'Actif' : 'Désactivé'}
+                                        </button>
+                                        ${u.username !== 'admin' ? `
+                                            <button onclick="deleteUser(${u.id})" class="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg" title="Supprimer"><i class="fa-solid fa-trash text-xs"></i></button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+                                    <span class="text-slate-400">Code PIN : <strong class="text-amber-400 font-mono">${u.pin}</strong></span>
+                                    <button onclick="editUserPin(${u.id})" class="text-blue-400 hover:underline"><i class="fa-solid fa-key mr-1"></i> Modifier PIN</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function addNewUser(e) {
+            e.preventDefault();
+            const name = document.getElementById('new-user-name').value.trim();
+            const username = document.getElementById('new-user-username').value.trim().toLowerCase();
+            const pin = document.getElementById('new-user-pin').value.trim();
+            const role = document.getElementById('new-user-role').value;
+
+            if(appState.users.some(u => u.username === username)) {
+                alert("Cet identifiant est déjà utilisé.");
+                return;
+            }
+
+            const newId = Math.max(0, ...appState.users.map(u => u.id)) + 1;
+            appState.users.push({ id: newId, name, username, pin, role, active: true });
+            saveState();
+            renderApp();
+            alert("Membre de l'équipe ajouté avec succès !");
+        }
+
+        function toggleUserStatus(userId) {
+            const u = appState.users.find(user => user.id === userId);
+            if(u) {
+                if(u.username === 'admin' && u.active) {
+                    alert("Impossible de désactiver le compte administrateur principal.");
+                    return;
+                }
+                u.active = !u.active;
+                saveState();
+                renderApp();
+            }
+        }
+
+        function editUserPin(userId) {
+            const u = appState.users.find(user => user.id === userId);
+            if(!u) return;
+            const newPin = prompt(`Nouveau code PIN pour ${u.name} :`, u.pin);
+            if(newPin && newPin.trim().length >= 3) {
+                u.pin = newPin.trim();
+                saveState();
+                renderApp();
+                alert("Code PIN mis à jour.");
+            }
+        }
+
+        function deleteUser(userId) {
+            const u = appState.users.find(user => user.id === userId);
+            if(u && u.username === 'admin') {
+                alert("Impossible de supprimer le compte administrateur principal.");
+                return;
+            }
+            if(confirm("Voulez-vous vraiment supprimer ce membre de l'équipe ?")) {
+                appState.users = appState.users.filter(user => user.id !== userId);
+                saveState();
+                renderApp();
+            }
+        }
+
+        // --- GESTION CATALOGUE (SERVICES SÉPARÉS DES PRODUITS & STOCKS) ---
+        function renderCatalogAdminSection() {
+            const services = appState.catalog.filter(i => i.type === 'SERVICE');
+            const products = appState.catalog.filter(i => i.type === 'PRODUCT');
+
+            return `
+                <div class="space-y-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un service ou un produit</h4>
+                        <form onsubmit="addNewCatalogItem(event)" class="space-y-3">
+                            <input type="text" id="cat-name" required placeholder="Nom (ex: Filtre à Air ou Lavage VIP)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            <div class="grid grid-cols-2 gap-2">
+                                <select id="cat-type" onchange="toggleStockInputVisibility(this.value)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="SERVICE">Type : Service</option>
+                                    <option value="PRODUCT">Type : Produit / Pièce</option>
+                                </select>
+                                <select id="cat-category" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="LAVAGE">Lavage</option>
+                                    <option value="VIDANGE">Vidange</option>
+                                    <option value="FILTRE">Filtre</option>
+                                    <option value="ACCESSOIRE">Accessoire</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="number" id="cat-price" required placeholder="Prix (DA)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                <input type="number" id="cat-stock" placeholder="Stock initial (si produit)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                            <input type="text" id="cat-barcode" placeholder="Code-barre / QR (Optionnel)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition">Ajouter au catalogue</button>
+                        </form>
+                    </div>
+
+                    <!-- LISTE DES SERVICES -->
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-blue-400 uppercase"><i class="fa-solid fa-screwdriver-wrench mr-1"></i> Services (Lavage & Main d'œuvre)</h4>
+                        ${services.map(item => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+                                <div>
+                                    <h5 class="text-xs font-bold text-white">${item.name}</h5>
+                                    <span class="text-[10px] text-slate-400">${item.category}</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-24 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Prix (DA)">
+                                    <button onclick="deleteCatalogItem(${item.id})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- LISTE DES PRODUITS & STOCKS -->
+                    <div class="space-y-2 pt-2">
+                        <h4 class="text-xs font-semibold text-amber-400 uppercase"><i class="fa-solid fa-box mr-1"></i> Produits & Stocks</h4>
+                        ${products.map(item => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+                                <div>
+                                    <h5 class="text-xs font-bold text-white">${item.name}</h5>
+                                    <span class="text-[10px] text-slate-400 font-mono">${item.barcode || 'Pas de code-barre'}</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-20 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Prix (DA)">
+                                    <input type="number" value="${item.stock}" onchange="updateCatalogStock(${item.id}, this.value)" class="w-16 bg-slate-950 border border-slate-800 text-xs text-blue-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Stock restant">
+                                    <button onclick="deleteCatalogItem(${item.id})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleStockInputVisibility(typeVal) {
+            const stockInput = document.getElementById('cat-stock');
+            if(stockInput) {
+                stockInput.disabled = (typeVal === 'SERVICE');
+                if(typeVal === 'SERVICE') stockInput.value = '';
+            }
+        }
+
+        function updateCatalogPrice(itemId, newPrice) {
+            const item = appState.catalog.find(c => c.id === itemId);
+            if(item) { item.price = parseFloat(newPrice) || 0; saveState(); }
+        }
+
+        function updateCatalogStock(itemId, newStock) {
+            const item = appState.catalog.find(c => c.id === itemId);
+            if(item) { item.stock = parseInt(newStock) || 0; saveState(); }
+        }
+
+        function addNewCatalogItem(e) {
+            e.preventDefault();
+            const name = document.getElementById('cat-name').value.trim();
+            const type = document.getElementById('cat-type').value;
+            const category = document.getElementById('cat-category').value;
+            const price = parseFloat(document.getElementById('cat-price').value);
+            const stock = type === 'PRODUCT' ? (parseInt(document.getElementById('cat-stock').value) || 0) : 0;
+            const barcode = document.getElementById('cat-barcode').value.trim() || ("BAR-" + Math.floor(Math.random() * 90000 + 10000));
+
+            const newId = Math.max(0, ...appState.catalog.map(c => c.id)) + 1;
+            appState.catalog.push({ id: newId, name, type, category, price, stock, barcode });
+            saveState();
+            renderApp();
+        }
+
+        function deleteCatalogItem(itemId) {
+            appState.catalog = appState.catalog.filter(c => c.id !== itemId);
+            saveState();
+            renderApp();
+        }
+
+        function openNewClientModal() {
+            const name = prompt("Nom complet du client :");
+            if(!name) return;
+            const phone = prompt("Numéro de téléphone :", "+213 ");
+            if(!phone) return;
+            const plate = prompt("Plaque d'immatriculation (ex: 12456-124-16) :").toUpperCase();
+            if(!plate) return;
+            const model = prompt("Modèle du véhicule :") || "Véhicule";
+            const mileage = parseInt(prompt("Kilométrage actuel :", "0")) || 0;
+
+            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage, country: 'DZ' });
+            saveState();
+            renderApp();
+            openVehicleDetail(newVehId);
+        }
+
+        window.onload = function() {
+            if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+                location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+                return;
+            }
+            renderApp();
+        };
+    </script>
+</body>
+</html>
