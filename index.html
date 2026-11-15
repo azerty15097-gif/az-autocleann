@@ -300,9 +300,7 @@
             `;
         }
 
-        // --- MODALE DE SAISIE ET SCAN PLAQUE ROBUSTE ---
-        let scannerStream = null;
-
+        // --- MODALE DE SAISIE ET SCAN PLAQUE ---
         function openPlateScanner() {
             closePlateScanner();
             const modal = document.createElement('div');
@@ -316,7 +314,7 @@
                     </div>
 
                     <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <p class="text-xs text-slate-300">Saisissez directement la plaque ou prenez une photo pour l'associer :</p>
+                        <p class="text-xs text-slate-300">Saisissez directement la plaque ou prenez une photo :</p>
                         
                         <input id="scan-plate-result" type="text" placeholder="Ex: 01234-116-16 ou AB-123-CD" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
 
@@ -330,7 +328,7 @@
                             </button>
                         </div>
                     </div>
-                    <p class="text-[11px] text-slate-500 text-center">Astuce : Si le véhicule existe déjà, il s'ouvrira directement. Sinon, un formulaire de création s'affichera.</p>
+                    <p class="text-[11px] text-slate-500 text-center">Astuce : Si le véhicule existe déjà, il s'ouvrira directement.</p>
                 </div>`;
             document.body.appendChild(modal);
             setTimeout(() => { document.getElementById('scan-plate-result')?.focus(); }, 100);
@@ -344,12 +342,6 @@
         function handlePhotoCapture(input) {
             const file = input.files && input.files[0];
             if (!file) return;
-            // Met un texte indicatif dans le champ si l'utilisateur veut saisir la suite
-            const inputField = document.getElementById('scan-plate-result');
-            if(inputField && !inputField.value) {
-                inputField.value = "";
-                inputField.placeholder = "Plaque prise en photo (saisissez si besoin)";
-            }
             input.value = '';
         }
 
@@ -374,13 +366,15 @@
             const name = prompt("Nom complet du client :", "") || "Client " + plate;
             const phone = prompt("Numéro de téléphone :", "+213 ") || "";
             const model = prompt("Modèle du véhicule (ex: Renault Symbol) :", "") || "Véhicule";
+            const mileageInput = prompt("Kilométrage actuel (ex: 45000) :", "0");
+            const mileage = parseInt(mileageInput) || 0;
             const country = plate.includes('-') && plate.length >= 10 ? 'DZ' : 'EU';
 
             const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
             appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
             
             const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 15000, country });
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage, country });
             
             saveState();
             renderApp();
@@ -392,6 +386,22 @@
         function openVehicleDetail(vehId) {
             selectedVehicleId = vehId;
             appState.currentView = 'vehicle_detail';
+            renderApp();
+        }
+
+        // Fonction pour modifier le kilométrage d'un véhicule
+        function updateVehicleMileage(vehId) {
+            const v = appState.vehicles.find(item => item.id === vehId);
+            if (!v) return;
+            const newKmInput = prompt(`Modifier le kilométrage pour ${v.plate} :`, v.mileage);
+            if (newKmInput === null) return;
+            const newKm = parseInt(newKmInput);
+            if (isNaN(newKm) || newKm < 0) {
+                alert("Veuillez entrer un kilométrage valide.");
+                return;
+            }
+            v.mileage = newKm;
+            saveState();
             renderApp();
         }
 
@@ -413,7 +423,12 @@
                                 <span class="text-lg">${countryMeta.flag}</span>
                                 <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
                             </div>
-                            <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                                <button onclick="updateVehicleMileage(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded-lg text-xs border border-slate-700" title="Modifier le kilométrage">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-white">${v.model}</h3>
@@ -695,11 +710,13 @@
             const plate = prompt("Plaque d'immatriculation (ex: 12456-124-16) :").toUpperCase();
             if(!plate) return;
             const model = prompt("Modèle du véhicule :") || "Véhicule";
+            const mileageInput = prompt("Kilométrage actuel (ex: 15000) :", "0");
+            const mileage = parseInt(mileageInput) || 0;
 
             const newClientId = appState.clients.length + 1;
             appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
             const newVehId = appState.vehicles.length + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 15000, country: 'DZ' });
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage, country: 'DZ' });
             saveState();
             renderApp();
             openVehicleDetail(newVehId);
