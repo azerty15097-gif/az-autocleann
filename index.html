@@ -130,7 +130,7 @@
             container.innerHTML = html;
         }
 
-        // --- VUE LOGIN (SANS LISTE DES USERS) ---
+        // --- VUE LOGIN ---
         function renderLoginView() {
             return `
                 <div class="flex-1 flex flex-col justify-center px-6 py-12 bg-slate-950">
@@ -238,7 +238,7 @@
                             </div>
                             <div class="flex space-x-2">
                                 <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
-                                    <i class="fa-solid fa-camera mr-2"></i> Scanner Plaque
+                                    <i class="fa-solid fa-camera mr-2"></i> Saisie / Scanner Plaque
                                 </button>
                                 <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
                                     <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
@@ -300,222 +300,90 @@
             `;
         }
 
-        // --- SCANNER DE PLAQUE (CAMÉRA + OCR MOBILE OPTIMISÉ) ---
+        // --- MODALE DE SAISIE ET SCAN PLAQUE ROBUSTE ---
         let scannerStream = null;
-        let tesseractWorkerPromise = null;
 
-        function loadTesseract() {
-            if (window.Tesseract) return Promise.resolve(window.Tesseract);
-            return new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-                s.onload = () => resolve(window.Tesseract);
-                s.onerror = () => reject(new Error("Impossible de charger le moteur OCR."));
-                document.head.appendChild(s);
-            });
-        }
-
-        function getOcrWorker() {
-            if (!tesseractWorkerPromise) {
-                tesseractWorkerPromise = loadTesseract().then(async T => {
-                    const worker = await T.createWorker('eng');
-                    await worker.setParameters({
-                        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ- ',
-                        tessedit_pageseg_mode: '7'
-                    });
-                    return worker;
-                }).catch(err => { tesseractWorkerPromise = null; throw err; });
-            }
-            return tesseractWorkerPromise;
-        }
-
-        function setScanStatus(msg, isError) {
-            const el = document.getElementById('scan-status');
-            if (!el) return;
-            el.textContent = msg;
-            el.className = 'text-xs text-center min-h-[1rem] ' + (isError ? 'text-red-400' : 'text-slate-400');
-        }
-
-        async function openPlateScanner() {
+        function openPlateScanner() {
             closePlateScanner();
             const modal = document.createElement('div');
             modal.id = 'scanner-modal';
             modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
             modal.innerHTML = `
-                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
                     <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-camera text-blue-500 mr-2"></i>Scanner une plaque</h3>
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-camera text-blue-500 mr-2"></i>Entrée Plaque Rapide</h3>
                         <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
                     </div>
-                    
-                    <div id="scan-video-wrap" class="relative bg-black rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center">
-                        <video id="scan-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                        <div class="absolute left-[8%] right-[8%] top-[38%] h-[24%] border-2 border-blue-400 rounded-lg pointer-events-none"></div>
-                    </div>
 
-                    <p id="scan-status" class="text-xs text-center text-slate-400 min-h-[1rem]">Prêt à scanner...</p>
-                    
-                    <div class="space-y-2">
-                        <!-- Bouton photo direct pour contourner les restrictions mobiles -->
-                        <label class="w-full bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-lg shadow-blue-600/30">
-                            <i class="fa-solid fa-camera-retro mr-2"></i> Prendre une photo de la plaque
-                            <input type="file" accept="image/*" capture="environment" class="hidden" onchange="scanFromFile(this)">
-                        </label>
-                        <button id="scan-capture-btn" onclick="captureFromVideo()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium">
-                            <i class="fa-solid fa-circle-dot mr-2"></i> Capturer le flux vidéo
-                        </button>
-                    </div>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <p class="text-xs text-slate-300">Saisissez directement la plaque ou prenez une photo pour l'associer :</p>
+                        
+                        <input id="scan-plate-result" type="text" placeholder="Ex: 01234-116-16 ou AB-123-CD" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
 
-                    <div class="space-y-2 pt-1 border-t border-slate-800">
-                        <label class="text-xs text-slate-400">Plaque détectée / modifiable</label>
-                        <input id="scan-plate-result" type="text" placeholder="ex: 12456-124-16" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white font-mono uppercase focus:outline-none focus:border-blue-500">
-                        <button onclick="confirmScannedPlate()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-2.5 rounded-xl font-medium">
-                            <i class="fa-solid fa-check mr-2"></i> Valider et ouvrir le véhicule
-                        </button>
+                        <div class="flex space-x-2 pt-1">
+                            <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
+                                <i class="fa-solid fa-camera-retro mr-1.5"></i> Photo Caméra
+                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoCapture(this)">
+                            </label>
+                            <button onclick="confirmScannedPlate()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                                <i class="fa-solid fa-check mr-1.5"></i> Valider Plaque
+                            </button>
+                        </div>
                     </div>
+                    <p class="text-[11px] text-slate-500 text-center">Astuce : Si le véhicule existe déjà, il s'ouvrira directement. Sinon, un formulaire de création s'affichera.</p>
                 </div>`;
             document.body.appendChild(modal);
-
-            getOcrWorker().catch(() => {});
-
-            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setScanStatus("Flux direct non supporté : utilisez le bouton photo ci-dessus.", true);
-                return;
-            }
-            try {
-                scannerStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: false
-                });
-                const video = document.getElementById('scan-video');
-                if (!video) { stopScannerStream(); return; }
-                video.srcObject = scannerStream;
-                await video.play().catch(() => {});
-                setScanStatus("Cadrez la plaque ou prenez une photo directe.");
-            } catch (err) {
-                setScanStatus("Caméra en direct indisponible. Utilisez le bouton photo.", true);
-            }
-        }
-
-        function stopScannerStream() {
-            if (scannerStream) {
-                scannerStream.getTracks().forEach(t => t.stop());
-                scannerStream = null;
-            }
+            setTimeout(() => { document.getElementById('scan-plate-result')?.focus(); }, 100);
         }
 
         function closePlateScanner() {
-            stopScannerStream();
             const m = document.getElementById('scanner-modal');
             if (m) m.remove();
         }
 
-        function preprocessForOcr(source, sw, sh, crop) {
-            const sx = crop ? sw * 0.08 : 0, sy = crop ? sh * 0.38 : 0;
-            const cw = crop ? sw * 0.84 : sw, ch = crop ? sh * 0.24 : sh;
-            const scale = Math.min(1, 1600 / cw) * (cw < 800 ? 2 : 1);
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.round(cw * scale);
-            canvas.height = Math.round(ch * scale);
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(source, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
-            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const d = img.data;
-            for (let i = 0; i < d.length; i += 4) {
-                let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-                g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
-                d[i] = d[i + 1] = d[i + 2] = g;
-            }
-            ctx.putImageData(img, 0, 0);
-            return canvas;
-        }
-
-        function captureFromVideo() {
-            const video = document.getElementById('scan-video');
-            if (!video || !video.videoWidth) { setScanStatus("La caméra n'est pas prête.", true); return; }
-            const vw = video.videoWidth, vh = video.videoHeight;
-            const ew = video.clientWidth, eh = video.clientHeight;
-            const s = Math.max(ew / vw, eh / vh);
-            const visW = ew / s, visH = eh / s;
-            const offX = (vw - visW) / 2, offY = (vh - visH) / 2;
-            const tmp = document.createElement('canvas');
-            tmp.width = Math.round(visW); tmp.height = Math.round(visH);
-            tmp.getContext('2d').drawImage(video, offX, offY, visW, visH, 0, 0, tmp.width, tmp.height);
-            runOcr([preprocessForOcr(tmp, tmp.width, tmp.height, true)]);
-        }
-
-        function scanFromFile(input) {
+        function handlePhotoCapture(input) {
             const file = input.files && input.files[0];
             if (!file) return;
-            const url = URL.createObjectURL(file);
-            const img = new Image();
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-                const w = img.naturalWidth, h = img.naturalHeight;
-                runOcr([preprocessForOcr(img, w, h, true), preprocessForOcr(img, w, h, false)]);
-            };
-            img.onerror = () => setScanStatus("Image illisible.", true);
-            img.src = url;
-            input.value = '';
-        }
-
-        function extractPlate(text) {
-            const t = (text || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ');
-            const compact = t.replace(/\s+/g, '');
-            let m = compact.match(/(\d{5,6})(\d{3})(\d{2})/);
-            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-            m = compact.match(/([A-Z]{2})(\d{3})([A-Z]{2})/);
-            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-            const tokens = t.trim().split(/\s+/).filter(x => /\d/.test(x) && x.length >= 4);
-            if (tokens.length) return tokens.sort((a, b) => b.length - a.length)[0];
-            return compact.length >= 4 ? compact : '';
-        }
-
-        async function runOcr(canvases) {
-            setScanStatus("Analyse de la plaque en cours...");
-            try {
-                const worker = await getOcrWorker();
-                let plate = '';
-                for (const c of canvases) {
-                    const { data } = await worker.recognize(c);
-                    plate = extractPlate(data.text);
-                    if (plate) break;
-                }
-                const out = document.getElementById('scan-plate-result');
-                if (!out) return;
-                if (plate) {
-                    out.value = plate;
-                    setScanStatus("Plaque lue avec succès ! Vérifiez puis validez.");
-                } else {
-                    setScanStatus("Plaque non reconnue clairement. Saisissez-la manuellement ci-dessous.", true);
-                    out.focus();
-                }
-            } catch (err) {
-                setScanStatus("Erreur d'analyse OCR.", true);
+            // Met un texte indicatif dans le champ si l'utilisateur veut saisir la suite
+            const inputField = document.getElementById('scan-plate-result');
+            if(inputField && !inputField.value) {
+                inputField.value = "";
+                inputField.placeholder = "Plaque prise en photo (saisissez si besoin)";
             }
+            input.value = '';
         }
 
         function confirmScannedPlate() {
             const input = document.getElementById('scan-plate-result');
             const plate = (input ? input.value : '').trim().toUpperCase();
-            if (!plate) { setScanStatus("Veuillez entrer ou scanner une plaque.", true); return; }
+            if (!plate) {
+                alert("Veuillez saisir un numéro de plaque.");
+                return;
+            }
             const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
             closePlateScanner();
 
             const existing = appState.vehicles.find(v => norm(v.plate) === norm(plate));
-            if (existing) { openVehicleDetail(existing.id); return; }
+            if (existing) {
+                openVehicleDetail(existing.id);
+                return;
+            }
 
-            if (!confirm(`Plaque ${plate} inconnue. Enregistrer un nouveau véhicule ?`)) return;
+            if (!confirm(`La plaque ${plate} n'existe pas dans le système. Voulez-vous enregistrer ce nouveau véhicule ?`)) return;
+            
             const name = prompt("Nom complet du client :", "") || "Client " + plate;
             const phone = prompt("Numéro de téléphone :", "+213 ") || "";
-            const model = prompt("Modèle du véhicule :", "") || "Non renseigné";
-            const country = /^\d{5,6}-\d{3}-\d{2}$/.test(plate) ? 'DZ' : (/^[A-Z]{2}-\d{3}-[A-Z]{2}$/.test(plate) ? 'EU' : 'OTHER');
+            const model = prompt("Modèle du véhicule (ex: Renault Symbol) :", "") || "Véhicule";
+            const country = plate.includes('-') && plate.length >= 10 ? 'DZ' : 'EU';
 
             const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
             appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            
             const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 0, country });
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 15000, country });
+            
             saveState();
+            renderApp();
             openVehicleDetail(newVehId);
         }
 
