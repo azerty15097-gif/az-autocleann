@@ -3,307 +3,594 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AZ-AutoClean | Gestion Pro & Caisse</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- FontAwesome Icons -->
+    <title>AZ-AutoClean - Gestion Lavage & Entretien</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- jsQR for Barcode / QR Code scanning -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-full flex flex-col selection:bg-amber-500 selection:text-slate-950">
+<body class="bg-slate-950 text-slate-100 font-sans h-full flex flex-col selection:bg-blue-600 selection:text-white">
 
     <!-- CONTENEUR PRINCIPAL DE L'APPLICATION -->
-    <div id="app" class="flex-1 flex flex-col h-full max-w-md mx-auto w-full bg-slate-900 shadow-2xl relative overflow-hidden border-x border-slate-800">
-        <!-- Rendu dynamique géré par JavaScript -->
+    <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-900 shadow-2xl relative overflow-hidden border-x border-slate-800">
+        <!-- Contenu dynamique injecté par JS -->
     </div>
 
     <!-- SCRIPT DE L'APPLICATION -->
     <script>
-        // --- ÉTAT GLOBAL DE L'APPLICATION & DONNÉES LOCALES ---
-        let appState = {
-            currentUser: null, // { name, role: 'admin'|'cashier', pin }
-            currentTab: 'plates', // 'plates' ou 'products'
-            vehicles: JSON.parse(localStorage.getItem('az_vehicles')) || [
-                { id: 1, plate: '01234-116-16', brand: 'Renault Clio V', owner: 'Karim B.', km: 45200, nextVidange: 50000, status: 'Actif', lastWash: '12/11/2026' },
-                { id: 2, plate: '09876-108-31', brand: 'Peugeot 208', owner: 'Amine Z.', km: 78900, nextVidange: 80000, status: 'Urgent Vidange', lastWash: '01/10/2026' },
-                { id: 3, plate: '05432-119-09', brand: 'Volkswagen Golf 7', owner: 'Sofiane H.', km: 31000, nextVidange: 40000, status: 'Actif', lastWash: '14/11/2026' }
-            ],
-            products: JSON.parse(localStorage.getItem('az_products')) || [
-                { id: 'P001', name: 'Huile Moteur 5W40 Synthese', barcode: '6131000123456', price: 6500, stock: 14, category: 'Lubrifiant' },
-                { id: 'P002', name: 'Filtre à Huile Purflux', barcode: '3285930128941', price: 1800, stock: 22, category: 'Filtre' },
-                { id: 'P003', name: 'Shampoing Carrosserie Mousse', barcode: '6139998877665', price: 2500, stock: 8, category: 'Lavage' }
-            ],
-            activeScanMode: null // 'plate' ou 'product'
+        // --- BASE DE DONNÉES INITIALE & CONFIGURATION ---
+        const DEFAULT_USERS = [
+            { id: 1, name: "Karim Benali", username: "admin", pin: "1234", role: "admin", active: true },
+            { id: 2, name: "Sofiane Hadj", username: "sofiane", pin: "1111", role: "cashier", active: true },
+            { id: 3, name: "Mourad Ziani", username: "mourad", pin: "2222", role: "washer", active: true }
+        ];
+
+        const ROLES_CONFIG = {
+            admin: { label: "Administrateur", badge: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+            cashier: { label: "Caissier", badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+            washer: { label: "Lavagiste / Mécano", badge: "bg-blue-500/20 text-blue-400 border-blue-500/30" }
         };
 
-        function saveToStorage() {
-            localStorage.setItem('az_vehicles', JSON.stringify(appState.vehicles));
-            localStorage.setItem('az_products', JSON.stringify(appState.products));
+        const COUNTRY_META = {
+            'DZ': { name: 'Algérie', flag: '🇩🇿', format: '12345-123-16' },
+            'EU': { name: 'EU', flag: '🇪🇺', format: 'AB-123-CD' },
+            'OTHER': { name: 'Autre format', flag: '🌐', format: 'Libre' }
+        };
+
+        const DEFAULT_CATALOG = [
+            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800 },
+            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500 },
+            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000 },
+            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200 },
+            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500 },
+            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300 },
+            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800 },
+            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500 },
+            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500 },
+            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300 }
+        ];
+
+        let appState = {
+            currentUser: null,
+            currentView: 'login',
+            users: JSON.parse(localStorage.getItem('autoclean_users')) || DEFAULT_USERS,
+            catalog: JSON.parse(localStorage.getItem('autoclean_catalog')) || DEFAULT_CATALOG,
+            clients: JSON.parse(localStorage.getItem('autoclean_clients')) || [
+                { id: 1, name: "Rachid Kaci", phone: "+213 555 12 34 56", totalSpent: 7300 },
+                { id: 2, name: "Amine Meziane", phone: "+213 661 98 76 54", totalSpent: 4100 }
+            ],
+            vehicles: JSON.parse(localStorage.getItem('autoclean_vehicles')) || [
+                { id: 1, clientId: 1, plate: "01234-116-15", model: "Renault Clio 4 (2022)", mileage: 45000, country: 'DZ' },
+                { id: 2, clientId: 2, plate: "AB-842-TR", model: "Peugeot 3008", mileage: 62000, country: 'EU' }
+            ],
+            passages: JSON.parse(localStorage.getItem('autoclean_passages')) || [
+                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, nextVidangeKm: 55000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
+                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, nextVidangeKm: 72000, totalAmount: 1500, items: ["Lavage Complet"] }
+            ],
+            adminTab: 'users',
+            selectedVehicleId: null,
+            activeCart: { vehicleId: null, items: [] }
+        };
+
+        function saveState() {
+            localStorage.setItem('autoclean_users', JSON.stringify(appState.users));
+            localStorage.setItem('autoclean_catalog', JSON.stringify(appState.catalog));
+            localStorage.setItem('autoclean_clients', JSON.stringify(appState.clients));
+            localStorage.setItem('autoclean_vehicles', JSON.stringify(appState.vehicles));
+            localStorage.setItem('autoclean_passages', JSON.stringify(appState.passages));
         }
 
-        // --- COMPOSANT LOGO AZ LUXURY ---
-        function renderAZLogo(size = 'normal') {
-            const sizeClass = size === 'large' ? 'w-16 h-16 text-2xl' : 'w-10 h-10 text-lg';
-            return `
-                <div class="${sizeClass} rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 flex items-center justify-center font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 tracking-tighter border border-amber-300/40">
-                    AZ
-                </div>
-            `;
-        }
+        // --- AUTHENTIFICATION ---
+        function loginUser(e) {
+            if(e) e.preventDefault();
+            const username = document.getElementById('login-user').value.trim().toLowerCase();
+            const pin = document.getElementById('login-pin').value.trim();
+            const errorDiv = document.getElementById('login-error');
 
-        // --- GESTIONNAIRE D'AFFICHAGE PRINCIPAL ---
-        function render() {
-            const appEl = document.getElementById('app');
-            if (!appState.currentUser) {
-                appEl.innerHTML = renderLoginScreen();
-            } else {
-                appEl.innerHTML = renderMainApp();
+            const found = appState.users.find(u => u.username === username && u.pin === pin);
+            if(!found) {
+                errorDiv.classList.remove('hidden');
+                return;
             }
-        }
-
-        // --- 1. ÉCRAN DE CONNEXION ---
-        function renderLoginScreen() {
-            return `
-                <div class="flex-1 flex flex-col justify-between p-6 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950">
-                    <div class="pt-12 text-center flex flex-col items-center">
-                        <div class="mb-4 animate-bounce">${renderAZLogo('large')}</div>
-                        <h1 class="text-3xl font-extrabold text-white tracking-tight">AZ-AutoClean</h1>
-                        <p class="text-xs text-amber-400 font-medium tracking-widest uppercase mt-1">Car Wash & Maintenance Management</p>
-                    </div>
-
-                    <div class="space-y-4 my-auto">
-                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-md">
-                            <h2 class="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-                                <i class="fa-solid fa-lock text-amber-400"></i> Sélectionner un profil d'accès
-                            </h2>
-                            <div class="space-y-3">
-                                <button onclick="loginAs('admin')" class="w-full text-left p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center justify-between group">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">A</div>
-                                        <div>
-                                            <div class="font-bold text-slate-100 group-hover:text-amber-400 transition-colors">Administrateur</div>
-                                            <div class="text-xs text-slate-400">Accès complet & Gestion parc</div>
-                                        </div>
-                                    </div>
-                                    <i class="fa-solid fa-chevron-right text-slate-500 group-hover:text-amber-400"></i>
-                                </button>
-                                <button onclick="loginAs('cashier')" class="w-full text-left p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center justify-between group">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">C</div>
-                                        <div>
-                                            <div class="font-bold text-slate-100 group-hover:text-blue-400 transition-colors">Caissier / Vente</div>
-                                            <div class="text-xs text-slate-400">Scan & Encaissement (Restrictions client)</div>
-                                        </div>
-                                    </div>
-                                    <i class="fa-solid fa-chevron-right text-slate-500 group-hover:text-blue-400"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="text-center text-xs text-slate-500 pb-4">
-                        AZ-AutoClean v2.6 • Sécurisé PWA
-                    </div>
-                </div>
-            `;
-        }
-
-        function loginAs(role) {
-            if (role === 'admin') {
-                appState.currentUser = { name: 'Karim Benali', role: 'admin' };
-            } else {
-                appState.currentUser = { name: 'Sofiane Hadj', role: 'cashier' };
+            if(!found.active) {
+                errorDiv.textContent = "Ce compte a été suspendu par l'administrateur.";
+                errorDiv.classList.remove('hidden');
+                return;
             }
-            render();
+
+            appState.currentUser = found;
+            appState.currentView = 'home';
+            renderApp();
         }
 
-        function logout() {
+        function logoutUser() {
             appState.currentUser = null;
-            render();
+            appState.currentView = 'login';
+            renderApp();
         }
 
-        // --- 2. INTERFACE PRINCIPALE ---
-        function renderMainApp() {
+        // --- MOTEUR DE RENDU PRINCIPAL ---
+        function renderApp() {
+            const container = document.getElementById('app');
+            container.innerHTML = '';
+
+            if(!appState.currentUser) {
+                container.innerHTML = renderLoginView();
+                return;
+            }
+
+            let html = '';
+            html += renderHeader();
+            html += `<main class="flex-1 overflow-y-auto pb-28 px-4 pt-4">`;
+
+            if(appState.currentView === 'home') html += renderHomeView();
+            else if(appState.currentView === 'clients') html += renderClientsView();
+            else if(appState.currentView === 'billing') html += renderBillingView();
+            else if(appState.currentView === 'journal') html += renderJournalView();
+            else if(appState.currentView === 'admin') html += renderAdminView();
+            else if(appState.currentView === 'vehicle_detail') html += renderVehicleDetailView();
+
+            html += `</main>`;
+            html += renderNav();
+            container.innerHTML = html;
+        }
+
+        // --- VUE LOGIN ---
+        function renderLoginView() {
             return `
-                <div class="flex-1 flex flex-col h-full overflow-hidden">
-                    <!-- HEADER -->
-                    <header class="px-5 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between backdrop-blur-md sticky top-0 z-20">
-                        <div class="flex items-center gap-3">
-                            ${renderAZLogo()}
-                            <div>
-                                <h1 class="text-base font-bold text-white leading-tight">AZ-AutoClean</h1>
-                                <span class="text-xs px-2 py-0.5 rounded-full ${appState.currentUser.role === 'admin' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}">
-                                    ${appState.currentUser.role === 'admin' ? 'Admin: ' + appState.currentUser.name : 'Caissier: ' + appState.currentUser.name}
-                                </span>
-                            </div>
+                <div class="flex-1 flex flex-col justify-center px-6 py-12 bg-slate-950">
+                    <div class="text-center mb-8">
+                        <div class="w-20 h-20 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-blue-500/20 mb-4">
+                            <i class="fa-solid fa-car-wash text-3xl text-white"></i>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="openScanner('plate')" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 flex items-center justify-center border border-slate-700 transition" title="Scanner Plaque">
-                                <i class="fa-solid fa-camera"></i>
-                            </button>
-                            <button onclick="logout()" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-red-900/40 text-slate-400 hover:text-red-400 flex items-center justify-center border border-slate-700 transition" title="Déconnexion">
-                                <i class="fa-solid fa-power-off"></i>
-                            </button>
-                        </div>
-                    </header>
-
-                    <!-- CONTENU ONGLET ACTIF -->
-                    <main class="flex-1 overflow-y-auto p-4 pb-24 hide-scrollbar">
-                        ${appState.currentTab === 'plates' ? renderPlatesTab() : renderProductsTab()}
-                    </main>
-
-                    <!-- NAVIGATION DU BAS -->
-                    <nav class="absolute bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800 px-6 py-3 flex items-center justify-around backdrop-blur-md z-20">
-                        <button onclick="switchTab('plates')" class="flex flex-col items-center gap-1 transition-all ${appState.currentTab === 'plates' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'}">
-                            <i class="fa-solid fa-car-side text-lg"></i>
-                            <span class="text-xs font-semibold">Plaques & Véhicules</span>
-                        </button>
-                        <button onclick="switchTab('products')" class="flex flex-col items-center gap-1 transition-all ${appState.currentTab === 'products' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'}">
-                            <i class="fa-solid fa-boxes-stacked text-lg"></i>
-                            <span class="text-xs font-semibold">Produits & Scan</span>
-                        </button>
-                    </nav>
-
-                    <!-- MODAL DE SCANNER CAMÉRA -->
-                    <div id="scannerModal" class="hidden fixed inset-0 z-50 bg-slate-950/95 flex flex-col p-4">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 id="scannerTitle" class="text-lg font-bold text-white flex items-center gap-2">
-                                <i class="fa-solid fa-camera text-amber-400"></i> Scanner Caméra
-                            </h3>
-                            <button onclick="closeScanner()" class="w-10 h-10 rounded-xl bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center">
-                                <i class="fa-solid fa-xmark text-lg"></i>
-                            </button>
-                        </div>
-                        <div class="flex-1 relative rounded-2xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center">
-                            <video id="scannerVideo" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
-                            <canvas id="scannerCanvas" class="hidden"></canvas>
-                            <!-- Viseur visuel -->
-                            <div class="absolute inset-12 border-2 border-amber-400/80 rounded-2xl pointer-events-none flex items-center justify-center">
-                                <div class="w-full h-0.5 bg-red-500/60 animate-pulse"></div>
-                            </div>
-                            <div class="absolute bottom-6 left-0 right-0 text-center px-4">
-                                <p id="scannerInstruction" class="text-xs bg-slate-900/80 text-amber-300 py-2 px-4 rounded-xl border border-slate-700/80 backdrop-blur-md inline-block">
-                                    Alignez l'élément dans le cadre
-                                </p>
-                            </div>
-                        </div>
-                        <div class="mt-4 flex gap-3">
-                            <button onclick="triggerManualCapture()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg transition">
-                                <i class="fa-solid fa-camera-rotate mr-2"></i> Capturer / Valider
-                            </button>
-                            <button onclick="closeScanner()" class="px-5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition">
-                                Annuler
-                            </button>
-                        </div>
+                        <h1 class="text-2xl font-bold text-white tracking-tight">AZ-AutoClean</h1>
+                        <p class="text-xs text-slate-400 mt-1">Gestion Station de Lavage & Entretien</p>
                     </div>
+
+                    <form onsubmit="loginUser(event)" class="space-y-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 backdrop-blur">
+                        <div id="login-error" class="hidden p-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl text-center">
+                            Identifiant ou code PIN incorrect.
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Identifiant</label>
+                            <input type="text" id="login-user" required placeholder="Ex: admin" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Code PIN</label>
+                            <input type="password" id="login-pin" required placeholder="••••" maxlength="6" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 tracking-widest">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-600/30 text-sm">
+                            Se connecter
+                        </button>
+                    </form>
                 </div>
             `;
         }
 
-        function switchTab(tab) {
-            appState.currentTab = tab;
-            render();
-        }
-
-        // --- ONGLET 1 : PLAQUES & VÉHICULES ---
-        function renderPlatesTab() {
+        // --- EN-TÊTE & NAVIGATION ---
+        function renderHeader() {
+            const roleInfo = ROLES_CONFIG[appState.currentUser.role];
             return `
-                <div class="space-y-5">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-lg font-bold text-white">Parc & Plaques</h2>
-                            <p class="text-xs text-slate-400">Suivi des véhicules et kilométrage vidange</p>
+                <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold">
+                            ${appState.currentUser.name.charAt(0)}
                         </div>
+                        <div>
+                            <h2 class="text-sm font-semibold text-white leading-tight">${appState.currentUser.name}</h2>
+                            <span class="inline-block text-[10px] px-2 py-0.5 rounded-full border mt-0.5 ${roleInfo.badge}">${roleInfo.label}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
                         ${appState.currentUser.role === 'admin' ? `
-                            <button onclick="openAddVehicleModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5">
-                                <i class="fa-solid fa-plus"></i> Nouveau Véhicule
+                            <button onclick="switchView('admin')" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400 hover:bg-slate-700 transition" title="Administration">
+                                <i class="fa-solid fa-shield-halved text-sm"></i>
                             </button>
                         ` : ''}
+                        <button onclick="logoutUser()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-rose-400 hover:bg-slate-700 transition" title="Déconnexion">
+                            <i class="fa-solid fa-power-off text-sm"></i>
+                        </button>
                     </div>
+                </header>
+            `;
+        }
 
-                    <!-- Barre de recherche plaques -->
-                    <div class="relative">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-500"></i>
-                        <input type="text" id="plateSearchInput" oninput="filterPlates(this.value)" placeholder="Rechercher par plaque, propriétaire..." class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500">
-                    </div>
+        function renderNav() {
+            const v = appState.currentView;
+            return `
+                <nav class="absolute bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 px-2 py-2 flex justify-around items-center z-30">
+                    <button onclick="switchView('home')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='home'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-house text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Accueil</span>
+                    </button>
+                    <button onclick="switchView('clients')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='clients'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-users text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Clients</span>
+                    </button>
+                    <button onclick="switchView('billing')" class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 border-4 border-slate-950 transition hover:bg-blue-500 relative">
+                        <i class="fa-solid fa-cash-register text-lg"></i>
+                        ${appState.activeCart.items.length > 0 ? `<span class="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">${appState.activeCart.items.length}</span>` : ''}
+                    </button>
+                    <button onclick="switchView('journal')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='journal'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-book text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Journal</span>
+                    </button>
+                    ${appState.currentUser.role === 'admin' ? `
+                    <button onclick="switchView('admin')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='admin'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-gear text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Admin</span>
+                    </button>` : ''}
+                </nav>
+            `;
+        }
 
-                    <!-- Liste des véhicules -->
-                    <div id="vehiclesList" class="space-y-3">
-                        ${appState.vehicles.map(v => `
-                            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
-                                <div class="flex items-start justify-between mb-3">
-                                    <div>
-                                        <span class="text-xs px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 font-mono font-bold border border-amber-500/20">${v.plate}</span>
-                                        <h3 class="text-sm font-bold text-white mt-2">${v.brand}</h3>
-                                        <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1 text-slate-500"></i> ${v.owner}</p>
-                                    </div>
-                                    <span class="text-xs px-2.5 py-1 rounded-full ${v.status === 'Actif' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}">
-                                        ${v.status}
-                                    </span>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-xs">
-                                    <div>
-                                        <span class="text-slate-500 block">Kilométrage actuel</span>
-                                        <span class="font-bold text-slate-200">${v.km.toLocaleString()} km</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-slate-500 block">Prochaine Vidange</span>
-                                        <span class="font-bold text-amber-400">${v.nextVidange.toLocaleString()} km</span>
-                                    </div>
-                                </div>
-                                ${appState.currentUser.role === 'admin' ? `
-                                    <div class="mt-3 pt-3 border-t border-slate-800/80 flex justify-end gap-2">
-                                        <button onclick="editVehicleKm(${v.id})" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition">
-                                            <i class="fa-solid fa-gauge mr-1 text-amber-400"></i> Màj KM
-                                        </button>
-                                        <button onclick="deleteVehicle(${v.id})" class="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded-lg transition">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </div>
-                                ` : ''}
+        function switchView(viewName) {
+            appState.currentView = viewName;
+            renderApp();
+        }
+
+        // --- VUE ACCUEIL ---
+        function renderHomeView() {
+            return `
+                <div class="space-y-6">
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                        <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
+                            <i class="fa-solid fa-magnifying-glass text-blue-500 mr-2"></i> Recherche & Entrée Véhicule
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="relative">
+                                <input type="text" id="search-plate-input" oninput="filterVehicles(this.value)" placeholder="Entrer plaque, nom ou modèle..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 uppercase">
+                                <i class="fa-solid fa-car absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
                             </div>
-                        `).join('')}
+                            <div class="flex space-x-2">
+                                <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
+                                    <i class="fa-solid fa-camera mr-2"></i> Scanner Plaque
+                                </button>
+                                <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
+                                    <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="search-results-container" class="space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Véhicules Récents</h4>
+                        ${renderVehicleList(appState.vehicles)}
                     </div>
                 </div>
             `;
         }
 
-        // --- ONGLET 2 : PRODUITS & SCAN ---
-        function renderProductsTab() {
-            return `
-                <div class="space-y-5">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-lg font-bold text-white">Inventaire & Produits</h2>
-                            <p class="text-xs text-slate-400">Gestion des stocks et scan code-barres</p>
+        function renderVehicleList(vehiclesList) {
+            if(vehiclesList.length === 0) {
+                return `
+                    <div class="text-center py-10 bg-slate-900/40 rounded-2xl border border-slate-800">
+                        <i class="fa-solid fa-car-side text-3xl text-slate-600 mb-2"></i>
+                        <p class="text-sm text-slate-400">Aucun véhicule trouvé.</p>
+                    </div>
+                `;
+            }
+            return vehiclesList.map(v => {
+                const client = appState.clients.find(c => c.id === v.clientId) || { name: 'Client Inconnu', phone: '' };
+                const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+                return `
+                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
+                                <span class="text-base">${countryMeta.flag}</span>
+                                <span class="font-mono font-bold text-white text-sm tracking-wide">${v.plate}</span>
+                            </div>
+                            <span class="text-xs text-blue-400 font-medium">${v.mileage.toLocaleString()} km</span>
                         </div>
-                        <button onclick="openScanner('product')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-barcode"></i> Scanner Produit
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">${v.model}</h4>
+                                <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1"></i> ${client.name} (${client.phone})</p>
+                            </div>
+                            <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">Historique <i class="fa-solid fa-chevron-right ml-1"></i></span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterVehicles(query) {
+            const q = query.toLowerCase();
+            const filtered = appState.vehicles.filter(v => {
+                const client = appState.clients.find(c => c.id === v.clientId) || {};
+                return v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q) || (client.name && client.name.toLowerCase().includes(q));
+            });
+            document.getElementById('search-results-container').innerHTML = `
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche</h4>
+                ${renderVehicleList(filtered)}
+            `;
+        }
+
+        // --- SCANNER DE PLAQUE & OCR ---
+        let scannerStream = null;
+        let tesseractWorkerPromise = null;
+
+        function loadTesseract() {
+            if (window.Tesseract) return Promise.resolve(window.Tesseract);
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                s.onload = () => resolve(window.Tesseract);
+                s.onerror = () => reject(new Error("Impossible de charger le moteur OCR."));
+                document.head.appendChild(s);
+            });
+        }
+
+        function getOcrWorker() {
+            if (!tesseractWorkerPromise) {
+                tesseractWorkerPromise = loadTesseract().then(async T => {
+                    const worker = await T.createWorker('eng');
+                    await worker.setParameters({
+                        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ- ',
+                        tessedit_pageseg_mode: '7'
+                    });
+                    return worker;
+                }).catch(err => { tesseractWorkerPromise = null; throw err; });
+            }
+            return tesseractWorkerPromise;
+        }
+
+        function setScanStatus(msg, isError) {
+            const el = document.getElementById('scan-status');
+            if (!el) return;
+            el.textContent = msg;
+            el.className = 'text-xs text-center min-h-[1rem] ' + (isError ? 'text-red-400' : 'text-slate-400');
+        }
+
+        async function openPlateScanner() {
+            closePlateScanner();
+            const modal = document.createElement('div');
+            modal.id = 'scanner-modal';
+            modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-camera text-blue-500 mr-2"></i>Scanner une plaque</h3>
+                        <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    
+                    <div id="scan-video-wrap" class="relative bg-black rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center">
+                        <video id="scan-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                        <div class="absolute left-[8%] right-[8%] top-[38%] h-[24%] border-2 border-blue-400 rounded-lg pointer-events-none"></div>
+                    </div>
+
+                    <p id="scan-status" class="text-xs text-center text-slate-400 min-h-[1rem]">Prêt à scanner...</p>
+                    
+                    <div class="space-y-2">
+                        <label class="w-full bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-lg shadow-blue-600/30">
+                            <i class="fa-solid fa-camera-retro mr-2"></i> Prendre une photo de la plaque
+                            <input type="file" accept="image/*" capture="environment" class="hidden" onchange="scanFromFile(this)">
+                        </label>
+                        <button id="scan-capture-btn" onclick="captureFromVideo()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium">
+                            <i class="fa-solid fa-circle-dot mr-2"></i> Capturer le flux vidéo
                         </button>
                     </div>
 
-                    <!-- Liste des produits -->
+                    <div class="space-y-2 pt-1 border-t border-slate-800">
+                        <label class="text-xs text-slate-400">Plaque détectée / modifiable</label>
+                        <input id="scan-plate-result" type="text" placeholder="ex: 12456-124-16" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white font-mono uppercase focus:outline-none focus:border-blue-500">
+                        <button onclick="confirmScannedPlate()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-2.5 rounded-xl font-medium">
+                            <i class="fa-solid fa-check mr-2"></i> Valider et ouvrir le véhicule
+                        </button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+
+            getOcrWorker().catch(() => {});
+
+            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setScanStatus("Flux direct non supporté : utilisez le bouton photo ci-dessus.", true);
+                return;
+            }
+            try {
+                scannerStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                const video = document.getElementById('scan-video');
+                if (!video) { stopScannerStream(); return; }
+                video.srcObject = scannerStream;
+                await video.play().catch(() => {});
+                setScanStatus("Cadrez la plaque ou prenez une photo directe.");
+            } catch (err) {
+                setScanStatus("Caméra en direct indisponible. Utilisez le bouton photo.", true);
+            }
+        }
+
+        function stopScannerStream() {
+            if (scannerStream) {
+                scannerStream.getTracks().forEach(t => t.stop());
+                scannerStream = null;
+            }
+        }
+
+        function closePlateScanner() {
+            stopScannerStream();
+            const m = document.getElementById('scanner-modal');
+            if (m) m.remove();
+        }
+
+        function preprocessForOcr(source, sw, sh, crop) {
+            const sx = crop ? sw * 0.08 : 0, sy = crop ? sh * 0.38 : 0;
+            const cw = crop ? sw * 0.84 : sw, ch = crop ? sh * 0.24 : sh;
+            const scale = Math.min(1, 1600 / cw) * (cw < 800 ? 2 : 1);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(cw * scale);
+            canvas.height = Math.round(ch * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(source, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = img.data;
+            for (let i = 0; i < d.length; i += 4) {
+                let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
+                d[i] = d[i + 1] = d[i + 2] = g;
+            }
+            ctx.putImageData(img, 0, 0);
+            return canvas;
+        }
+
+        function captureFromVideo() {
+            const video = document.getElementById('scan-video');
+            if (!video || !video.videoWidth) { setScanStatus("La caméra n'est pas prête.", true); return; }
+            const vw = video.videoWidth, vh = video.videoHeight;
+            const ew = video.clientWidth, eh = video.clientHeight;
+            const s = Math.max(ew / vw, eh / vh);
+            const visW = ew / s, visH = eh / s;
+            const offX = (vw - visW) / 2, offY = (vh - visH) / 2;
+            const tmp = document.createElement('canvas');
+            tmp.width = Math.round(visW); tmp.height = Math.round(visH);
+            tmp.getContext('2d').drawImage(video, offX, offY, visW, visH, 0, 0, tmp.width, tmp.height);
+            runOcr([preprocessForOcr(tmp, tmp.width, tmp.height, true)]);
+        }
+
+        function scanFromFile(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const w = img.naturalWidth, h = img.naturalHeight;
+                runOcr([preprocessForOcr(img, w, h, true), preprocessForOcr(img, w, h, false)]);
+            };
+            img.onerror = () => setScanStatus("Image illisible.", true);
+            img.src = url;
+            input.value = '';
+        }
+
+        function extractPlate(text) {
+            const t = (text || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ');
+            const compact = t.replace(/\s+/g, '');
+            let m = compact.match(/(\d{5,6})(\d{3})(\d{2})/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+            m = compact.match(/([A-Z]{2})(\d{3})([A-Z]{2})/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+            const tokens = t.trim().split(/\s+/).filter(x => /\d/.test(x) && x.length >= 4);
+            if (tokens.length) return tokens.sort((a, b) => b.length - a.length)[0];
+            return compact.length >= 4 ? compact : '';
+        }
+
+        async function runOcr(canvases) {
+            setScanStatus("Analyse de la plaque en cours...");
+            try {
+                const worker = await getOcrWorker();
+                let plate = '';
+                for (const c of canvases) {
+                    const { data } = await worker.recognize(c);
+                    plate = extractPlate(data.text);
+                    if (plate) break;
+                }
+                const out = document.getElementById('scan-plate-result');
+                if (!out) return;
+                if (plate) {
+                    out.value = plate;
+                    setScanStatus("Plaque lue avec succès ! Vérifiez puis validez.");
+                } else {
+                    setScanStatus("Plaque non reconnue clairement. Saisissez-la manuellement ci-dessous.", true);
+                    out.focus();
+                }
+            } catch (err) {
+                setScanStatus("Erreur d'analyse OCR.", true);
+            }
+        }
+
+        function confirmScannedPlate() {
+            const input = document.getElementById('scan-plate-result');
+            const plate = (input ? input.value : '').trim().toUpperCase();
+            if (!plate) { setScanStatus("Veuillez entrer ou scanner une plaque.", true); return; }
+            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            closePlateScanner();
+
+            const existing = appState.vehicles.find(v => norm(v.plate) === norm(plate));
+            if (existing) { openVehicleDetail(existing.id); return; }
+
+            if (!confirm(`Plaque ${plate} inconnue. Enregistrer un nouveau véhicule ?`)) return;
+            const name = prompt("Nom complet du client :", "") || "Client " + plate;
+            const phone = prompt("Numéro de téléphone :", "+213 ") || "";
+            const model = prompt("Modèle du véhicule :", "") || "Non renseigné";
+            const country = /^\d{5,6}-\d{3}-\d{2}$/.test(plate) ? 'DZ' : (/^[A-Z]{2}-\d{3}-[A-Z]{2}$/.test(plate) ? 'EU' : 'OTHER');
+
+            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 0, country });
+            saveState();
+            openVehicleDetail(newVehId);
+        }
+
+        function openNewClientModal() {
+            const name = prompt("Nom du nouveau client :");
+            if(!name) return;
+            const phone = prompt("Téléphone :", "+213 ");
+            const plate = prompt("Plaque d'immatriculation (ex: 01234-116-16) :").toUpperCase();
+            if(!plate) return;
+            const model = prompt("Modèle du véhicule :") || "Véhicule";
+
+            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
+            const country = /^\d{5,6}-\d{3}-\d{2}$/.test(plate) ? 'DZ' : 'OTHER';
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 0, country });
+            saveState();
+            renderApp();
+        }
+
+        // --- VUE DETAIL VEHICULE & HISTORIQUE ---
+        function openVehicleDetail(vehId) {
+            appState.selectedVehicleId = vehId;
+            appState.currentView = 'vehicle_detail';
+            renderApp();
+        }
+
+        function renderVehicleDetailView() {
+            const v = appState.vehicles.find(item => item.id === appState.selectedVehicleId);
+            if(!v) return `<p class="text-center text-slate-400">Véhicule introuvable.</p>`;
+            const client = appState.clients.find(c => c.id === v.clientId) || {};
+            const passages = appState.passages.filter(p => p.vehicleId === v.id);
+            const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+
+            return `
+                <div class="space-y-6">
+                    <button onclick="switchView('home')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                        <i class="fa-solid fa-arrow-left mr-2"></i> Retour à l'accueil
+                    </button>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
+                                <span class="text-lg">${countryMeta.flag}</span>
+                                <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
+                            </div>
+                            <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white">${v.model}</h3>
+                            <p class="text-xs text-slate-400 mt-1"><i class="fa-solid fa-user mr-1"></i> ${client.name} — ${client.phone}</p>
+                        </div>
+                        <div class="flex space-x-2 pt-2">
+                            <button onclick="startBillingForVehicle(${v.id})" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition shadow-md shadow-blue-600/30">
+                                <i class="fa-solid fa-cash-register mr-2"></i> Nouveau Passage / Caisse
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="space-y-3">
-                        ${appState.products.map(p => `
-                            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center justify-between">
-                                <div>
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-mono">${p.id}</span>
-                                        <span class="text-xs text-slate-400">${p.category}</span>
-                                    </div>
-                                    <h3 class="text-sm font-bold text-white">${p.name}</h3>
-                                    <p class="text-xs text-slate-500 font-mono mt-0.5">Code: ${p.barcode}</p>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique des passages</h4>
+                        ${passages.length === 0 ? `<p class="text-xs text-slate-500 italic bg-slate-900/40 p-4 rounded-xl border border-slate-800">Aucun passage enregistré pour ce véhicule.</p>` : passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                                <div class="flex justify-between text-xs text-slate-400">
+                                    <span><i class="fa-solid fa-calendar mr-1"></i> ${p.date}</span>
+                                    <span class="text-blue-400 font-medium">${p.mileage.toLocaleString()} km</span>
                                 </div>
-                                <div class="text-right">
-                                    <div class="text-sm font-extrabold text-amber-400">${p.price.toLocaleString()} DA</div>
-                                    <div class="text-xs text-slate-400 mt-1">Stock: <span class="font-bold text-white">${p.stock}</span></div>
+                                <div class="flex flex-wrap gap-1">
+                                    ${p.items.map(i => `<span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md">${i}</span>`).join('')}
+                                </div>
+                                <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                                    <span class="text-xs text-slate-400">Prochaine vidange : <strong class="text-white">${p.nextVidangeKm ? p.nextVidangeKm.toLocaleString() + ' km' : 'N/C'}</strong></span>
+                                    <span class="text-sm font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
                                 </div>
                             </div>
                         `).join('')}
@@ -312,179 +599,254 @@
             `;
         }
 
-        // --- GESTION CAMÉRA & SCANNER ---
-        let videoStream = null;
-        let scanInterval = null;
+        // --- VUE CAISSE & ENCAISSEMENT ---
+        function startBillingForVehicle(vehId) {
+            appState.activeCart = { vehicleId: vehId, items: [] };
+            switchView('billing');
+        }
 
-        function openScanner(mode) {
-            appState.activeScanMode = mode;
-            const modal = document.getElementById('scannerModal');
-            const title = document.getElementById('scannerTitle');
-            const instruction = document.getElementById('scannerInstruction');
+        function renderBillingView() {
+            const vehicle = appState.vehicles.find(v => v.id === appState.activeCart.vehicleId);
+            const total = appState.activeCart.items.reduce((sum, item) => sum + item.price, 0);
+
+            return `
+                <div class="space-y-5">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex justify-between items-center">
+                        <div>
+                            <h3 class="text-sm font-semibold text-white">Caisse & Prestations</h3>
+                            <p class="text-xs text-slate-400">${vehicle ? 'Véhicule : ' + vehicle.plate : 'Aucun véhicule sélectionné'}</p>
+                        </div>
+                        <button onclick="selectVehicleForCart()" class="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-2 rounded-xl transition">
+                            ${vehicle ? 'Changer' : 'Sélectionner véhicule'}
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        ${appState.catalog.map(item => `
+                            <button onclick="addToCart(${item.id})" class="bg-slate-900 hover:bg-slate-800 border border-slate-800 p-3 rounded-xl text-left transition flex flex-col justify-between space-y-2">
+                                <span class="text-xs font-semibold text-white line-clamp-2">${item.name}</span>
+                                <div class="flex justify-between items-center w-full">
+                                    <span class="text-xs font-bold text-blue-400">${item.price.toLocaleString()} DA</span>
+                                    <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">${item.category}</span>
+                                </div>
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Panier en cours</h4>
+                        ${appState.activeCart.items.length === 0 ? `<p class="text-xs text-slate-500 italic">Le panier est vide.</p>` : `
+                            <div class="space-y-2 max-h-40 overflow-y-auto">
+                                ${appState.activeCart.items.map((it, idx) => `
+                                    <div class="flex justify-between items-center text-xs bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                                        <span class="text-slate-200">${it.name}</span>
+                                        <div class="flex items-center space-x-3">
+                                            <span class="font-bold text-white">${it.price.toLocaleString()} DA</span>
+                                            <button onclick="removeFromCart(${idx})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="pt-3 border-t border-slate-800 flex justify-between items-center">
+                                <span class="text-sm font-semibold text-white">Total à encaisser :</span>
+                                <span class="text-base font-bold text-emerald-400">${total.toLocaleString()} DA</span>
+                            </div>
+                            <button onclick="validateCheckout()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-3 rounded-xl transition shadow-lg shadow-emerald-600/20">
+                                <i class="fa-solid fa-check-circle mr-2"></i> Valider l'Encaissement
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function selectVehicleForCart() {
+            const plate = prompt("Entrez la plaque du véhicule pour la caisse :").toUpperCase();
+            if(!plate) return;
+            const found = appState.vehicles.find(v => v.plate.toUpperCase() === plate);
+            if(!found) {
+                alert("Véhicule introuvable.");
+                return;
+            }
+            appState.activeCart.vehicleId = found.id;
+            renderApp();
+        }
+
+        function addToCart(catalogId) {
+            const item = appState.catalog.find(c => c.id === catalogId);
+            if(item) {
+                appState.activeCart.items.push({ ...item });
+                renderApp();
+            }
+        }
+
+        function removeFromCart(index) {
+            appState.activeCart.items.splice(index, 1);
+            renderApp();
+        }
+
+        function validateCheckout() {
+            if(!appState.activeCart.vehicleId) {
+                alert("Veuillez associer un véhicule au panier avant d'encaisser.");
+                selectVehicleForCart();
+                return;
+            }
+            if(appState.activeCart.items.length === 0) {
+                alert("Le panier est vide.");
+                return;
+            }
+
+            const vehicle = appState.vehicles.find(v => v.id === appState.activeCart.vehicleId);
+            const total = appState.activeCart.items.reduce((s, i) => s + i.price, 0);
+            const currentMileage = vehicle.mileage || 0;
+            const newMileage = parseInt(prompt(`Kilométrage actuel du véhicule (${currentMileage} km) :`, currentMileage)) || currentMileage;
             
-            if (mode === 'plate') {
-                title.innerHTML = `<i class="fa-solid fa-car-side text-amber-400"></i> Scan Plaque d'Immatriculation`;
-                instruction.innerText = `Pointez la caméra vers la plaque du véhicule`;
-            } else {
-                title.innerHTML = `<i class="fa-solid fa-barcode text-amber-400"></i> Scan Code-barres / QR`;
-                instruction.innerText = `Alignez le code-barres dans le cadre`;
+            vehicle.mileage = newMileage;
+            let nextVidange = null;
+            if(appState.activeCart.items.some(i => i.category === 'VIDANGE')) {
+                nextVidange = newMileage + 10000;
             }
 
-            modal.classList.remove('hidden');
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                .then(stream => {
-                    videoStream = stream;
-                    const video = document.getElementById('scannerVideo');
-                    video.srcObject = stream;
-                    video.play();
-                    scanInterval = setInterval(processFrame, 500);
-                })
-                .catch(err => {
-                    alert("Erreur d'accès à la caméra : " + err.message);
-                    closeScanner();
-                });
-        }
-
-        function closeScanner() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
-            if (scanInterval) {
-                clearInterval(scanInterval);
-                scanInterval = null;
-            }
-            document.getElementById('scannerModal').classList.add('hidden');
-        }
-
-        function processFrame() {
-            const video = document.getElementById('scannerVideo');
-            const canvas = document.getElementById('scannerCanvas');
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                if (appState.activeScanMode === 'product') {
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-                    if (code) {
-                        handleSuccessfulScan('product', code.data);
-                    }
-                }
-            }
-        }
-
-        function triggerManualCapture() {
-            if (appState.activeScanMode === 'plate') {
-                // Simulation instantanée de reconnaissance plaque
-                const samplePlates = ['01234-116-16', '09876-108-31', '05432-119-09', '02211-112-25'];
-                const detected = samplePlates[Math.floor(Math.random() * samplePlates.length)];
-                handleSuccessfulScan('plate', detected);
-            } else {
-                // Simulation produit
-                const sampleProds = appState.products;
-                const prod = sampleProds[Math.floor(Math.random() * sampleProds.length)];
-                handleSuccessfulScan('product', prod.barcode);
-            }
-        }
-
-        function handleSuccessfulScan(type, data) {
-            closeScanner();
-            if (type === 'plate') {
-                const found = appState.vehicles.find(v => v.plate.includes(data));
-                if (found) {
-                    alert(`Véhicule reconnu !\nPlaque : ${found.plate}\nMarque : ${found.brand}\nPropriétaire : ${found.owner}\nKilométrage : ${found.km} km`);
-                } else {
-                    if (appState.currentUser.role === 'admin') {
-                        if (confirm(`Plaque ${data} non trouvée. Voulez-vous créer un nouveau véhicule ?`)) {
-                            appState.vehicles.unshift({
-                                id: Date.now(),
-                                plate: data,
-                                brand: 'Véhicule Scanné',
-                                owner: 'Client Direct',
-                                km: 10000,
-                                nextVidange: 20000,
-                                status: 'Actif',
-                                lastWash: new Date().toLocaleDateString()
-                            });
-                            saveToStorage();
-                            render();
-                        }
-                    } else {
-                        alert(`Plaque ${data} non enregistrée. (Accès restreint : Seul l'administrateur peut créer un nouveau client).`);
-                    }
-                }
-            } else {
-                const foundProd = appState.products.find(p => p.barcode === data);
-                if (foundProd) {
-                    alert(`Produit trouvé : ${foundProd.name}\nPrix : ${foundProd.price} DA\nStock disponible : ${foundProd.stock}`);
-                } else {
-                    alert(`Code-barres scanné : ${data} (Aucun produit correspondant dans l'inventaire)`);
-                }
-            }
-        }
-
-        // --- ACTIONS ADMIN (Véhicules) ---
-        function openAddVehicleModal() {
-            const plate = prompt("Entrez le numéro de plaque (ex: 01234-116-16) :");
-            if (!plate) return;
-            const brand = prompt("Modèle / Marque du véhicule :");
-            const owner = prompt("Nom du propriétaire :");
-            const km = parseInt(prompt("Kilométrage actuel :") || "0");
-
-            appState.vehicles.unshift({
+            appState.passages.unshift({
                 id: Date.now(),
-                plate: plate,
-                brand: brand || 'Véhicule',
-                owner: owner || 'Client',
-                km: km,
-                nextVidange: km + 10000,
-                status: 'Actif',
-                lastWash: new Date().toLocaleDateString()
+                vehicleId: vehicle.id,
+                date: dateStr,
+                mileage: newMileage,
+                nextVidangeKm: nextVidange,
+                totalAmount: total,
+                items: appState.activeCart.items.map(i => i.name)
             });
-            saveToStorage();
-            render();
+
+            const client = appState.clients.find(c => c.id === vehicle.clientId);
+            if(client) client.totalSpent = (client.totalSpent || 0) + total;
+
+            saveState();
+            appState.activeCart = { vehicleId: null, items: [] };
+            alert(`Encaissement validé avec succès ! Total : ${total.toLocaleString()} DA`);
+            switchView('journal');
         }
 
-        function editVehicleKm(id) {
-            const v = appState.vehicles.find(item => item.id === id);
-            if (!v) return;
-            const newKm = prompt(`Modifier le kilométrage pour ${v.plate} :`, v.km);
-            if (newKm !== null) {
-                v.km = parseInt(newKm) || v.km;
-                if (v.km >= v.nextVidange) {
-                    v.status = 'Urgent Vidange';
-                } else {
-                    v.status = 'Actif';
-                }
-                saveToStorage();
-                render();
+        // --- VUE JOURNAL ---
+        function renderJournalView() {
+            const totalRevenue = appState.passages.reduce((sum, p) => sum + p.totalAmount, 0);
+            return `
+                <div class="space-y-5">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex justify-between items-center">
+                        <div>
+                            <h3 class="text-sm font-semibold text-white">Journal des Passages</h3>
+                            <p class="text-xs text-slate-400">${appState.passages.length} prestations enregistrées</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] text-slate-400 block uppercase">Chiffre d'affaires</span>
+                            <span class="text-sm font-bold text-emerald-400">${totalRevenue.toLocaleString()} DA</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        ${appState.passages.map(p => {
+                            const vehicle = appState.vehicles.find(v => v.id === p.vehicleId) || { plate: 'Inconnu', model: '' };
+                            return `
+                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-mono font-bold text-white text-xs bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">${vehicle.plate}</span>
+                                        <span class="text-xs text-slate-400">${p.date}</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1 pt-1">
+                                        ${p.items.map(i => `<span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md">${i}</span>`).join('')}
+                                    </div>
+                                    <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-xs">
+                                        <span class="text-slate-400">${vehicle.model}</span>
+                                        <span class="font-bold text-emerald-400 text-sm">${p.totalAmount.toLocaleString()} DA</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- VUE CLIENTS ---
+        function renderClientsView() {
+            return `
+                <div class="space-y-5">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex justify-between items-center">
+                        <div>
+                            <h3 class="text-sm font-semibold text-white">Annuaire Clients</h3>
+                            <p class="text-xs text-slate-400">${appState.clients.length} clients enregistrés</p>
+                        </div>
+                        <button onclick="openNewClientModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-2 rounded-xl transition font-medium">
+                            <i class="fa-solid fa-user-plus mr-1"></i> Ajouter
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        ${appState.clients.map(c => {
+                            const vCount = appState.vehicles.filter(v => v.clientId === c.id).length;
+                            return `
+                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h4 class="text-sm font-bold text-white">${c.name}</h4>
+                                            <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i> ${c.phone}</p>
+                                        </div>
+                                        <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full">${vCount} véhicule(s)</span>
+                                    </div>
+                                    <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-xs">
+                                        <span class="text-slate-400">Total dépensé</span>
+                                        <span class="font-bold text-emerald-400">${(c.totalSpent || 0).toLocaleString()} DA</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- VUE ADMIN ---
+        function renderAdminView() {
+            return `
+                <div class="space-y-5">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                        <h3 class="text-sm font-semibold text-white mb-1"><i class="fa-solid fa-shield-halved text-amber-400 mr-2"></i>Administration</h3>
+                        <p class="text-xs text-slate-400">Gestion des utilisateurs et du catalogue</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Comptes Employés</h4>
+                        ${appState.users.map(u => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex justify-between items-center text-xs">
+                                <div>
+                                    <div class="font-bold text-white">${u.name} (<span class="font-mono text-slate-400">${u.username}</span>)</div>
+                                    <div class="text-slate-400 mt-0.5">Rôle : <strong class="text-slate-200">${ROLES_CONFIG[u.role].label}</strong> | PIN : <strong class="text-amber-400 font-mono">${u.pin}</strong></div>
+                                </div>
+                                <button onclick="toggleUserActive(${u.id})" class="px-3 py-1.5 rounded-lg border transition ${u.active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'}">
+                                    ${u.active ? 'Actif' : 'Suspendu'}
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleUserActive(userId) {
+            const u = appState.users.find(user => user.id === userId);
+            if(u && u.username !== 'admin') {
+                u.active = !u.active;
+                saveState();
+                renderApp();
+            } else {
+                alert("Impossible de modifier le compte administrateur principal.");
             }
-        }
-
-        function deleteVehicle(id) {
-            if (confirm("Voulez-vous supprimer ce véhicule du parc ?")) {
-                appState.vehicles = appState.vehicles.filter(v => v.id !== id);
-                saveToStorage();
-                render();
-            }
-        }
-
-        function filterPlates(query) {
-            // Filtrage dynamique simple de la liste
-            const q = query.toLowerCase();
-            const cards = document.querySelectorAll('#vehiclesList > div');
-            cards.forEach(card => {
-                const text = card.innerText.toLowerCase();
-                card.style.display = text.includes(q) ? 'block' : 'none';
-            });
         }
 
         // --- INITIALISATION ---
-        render();
+        renderApp();
     </script>
 </body>
 </html>
