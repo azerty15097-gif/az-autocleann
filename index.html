@@ -1,20 +1,19 @@
 <!DOCTYPE html>
-<html lang="fr" class="h-full">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AZ-AutoClean - Gestion Lavage & Entretien</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans h-full flex flex-col selection:bg-blue-600 selection:text-white">
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
 
     <!-- CONTENEUR PRINCIPAL DE L'APPLICATION -->
-    <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-900 shadow-2xl relative overflow-hidden border-x border-slate-800">
-        <!-- Contenu dynamique injecté par JS -->
+    <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-950 shadow-2xl relative overflow-hidden">
+        <!-- Le contenu dynamique est injecté ici par JavaScript -->
     </div>
 
-    <!-- SCRIPT DE L'APPLICATION -->
     <script>
         // --- BASE DE DONNÉES INITIALE & CONFIGURATION ---
         const DEFAULT_USERS = [
@@ -36,16 +35,16 @@
         };
 
         const DEFAULT_CATALOG = [
-            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800 },
-            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500 },
-            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000 },
-            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200 },
-            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500 },
-            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300 },
-            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800 },
-            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500 },
-            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500 },
-            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300 }
+            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800, stock: 50 },
+            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500, stock: 50 },
+            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000, stock: 30 },
+            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200, stock: 100 },
+            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500, stock: 14 },
+            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300, stock: 8 },
+            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800, stock: 12 },
+            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500, stock: 5 },
+            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500, stock: 25 },
+            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300, stock: 40 }
         ];
 
         let appState = {
@@ -62,12 +61,10 @@
                 { id: 2, clientId: 2, plate: "AB-842-TR", model: "Peugeot 3008", mileage: 62000, country: 'EU' }
             ],
             passages: JSON.parse(localStorage.getItem('autoclean_passages')) || [
-                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, nextVidangeKm: 55000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
-                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, nextVidangeKm: 72000, totalAmount: 1500, items: ["Lavage Complet"] }
+                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
+                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, totalAmount: 1500, items: ["Lavage Complet"] }
             ],
-            adminTab: 'users',
-            selectedVehicleId: null,
-            activeCart: { vehicleId: null, items: [] }
+            adminTab: 'users'
         };
 
         function saveState() {
@@ -91,7 +88,7 @@
                 return;
             }
             if(!found.active) {
-                errorDiv.textContent = "Ce compte a été suspendu par l'administrateur.";
+                errorDiv.textContent = "Ce compte a été suspendu.";
                 errorDiv.classList.remove('hidden');
                 return;
             }
@@ -119,7 +116,7 @@
 
             let html = '';
             html += renderHeader();
-            html += `<main class="flex-1 overflow-y-auto pb-28 px-4 pt-4">`;
+            html += `<main class="flex-1 overflow-y-auto pb-24 px-4 pt-4">`;
 
             if(appState.currentView === 'home') html += renderHomeView();
             else if(appState.currentView === 'clients') html += renderClientsView();
@@ -151,7 +148,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-400 mb-1">Identifiant</label>
-                            <input type="text" id="login-user" required placeholder="Ex: admin" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" id="login-user" required placeholder="Votre identifiant" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-400 mb-1">Code PIN</label>
@@ -205,9 +202,8 @@
                         <i class="fa-solid fa-users text-lg mb-0.5"></i>
                         <span class="text-[10px] font-medium">Clients</span>
                     </button>
-                    <button onclick="switchView('billing')" class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 border-4 border-slate-950 transition hover:bg-blue-500 relative">
+                    <button onclick="switchView('billing')" class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 border-4 border-slate-950 transition hover:bg-blue-500">
                         <i class="fa-solid fa-cash-register text-lg"></i>
-                        ${appState.activeCart.items.length > 0 ? `<span class="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">${appState.activeCart.items.length}</span>` : ''}
                     </button>
                     <button onclick="switchView('journal')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='journal'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
                         <i class="fa-solid fa-book text-lg mb-0.5"></i>
@@ -227,7 +223,7 @@
             renderApp();
         }
 
-        // --- VUE ACCUEIL ---
+        // --- VUE ACCUEIL (STOCKS RESTANTS UNIQUEMENT PAR DÉFAUT) ---
         function renderHomeView() {
             return `
                 <div class="space-y-6">
@@ -242,7 +238,7 @@
                             </div>
                             <div class="flex space-x-2">
                                 <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
-                                    <i class="fa-solid fa-camera mr-2"></i> Scanner Plaque
+                                    <i class="fa-solid fa-qrcode mr-2"></i> Scanner / Plaque / QR
                                 </button>
                                 <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
                                     <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
@@ -252,9 +248,47 @@
                     </div>
 
                     <div id="search-results-container" class="space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Véhicules Récents</h4>
-                        ${renderVehicleList(appState.vehicles)}
+                        <div class="flex justify-between items-center">
+                            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center">
+                                <i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i> Stocks Restants
+                            </h4>
+                            <span class="text-[11px] text-slate-500">${appState.catalog.length} produits</span>
+                        </div>
+                        ${renderRemainingStocksList()}
                     </div>
+                </div>
+            `;
+        }
+
+        function renderRemainingStocksList() {
+            if (appState.catalog.length === 0) {
+                return `
+                    <div class="text-center py-8 bg-slate-900/40 rounded-2xl border border-slate-800">
+                        <p class="text-xs text-slate-400">Aucun produit enregistré.</p>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl divide-y divide-slate-800/80 shadow-md overflow-hidden">
+                    ${appState.catalog.map(item => {
+                        const isLow = item.stock <= 10;
+                        const isEmpty = item.stock === 0;
+                        const badgeClass = isEmpty
+                            ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                            : (isLow
+                                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30');
+
+                        return `
+                            <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-800/40 transition">
+                                <span class="text-xs font-medium text-slate-100 pr-3">${item.name}</span>
+                                <span class="text-xs font-bold px-2.5 py-1 rounded-lg border shrink-0 ${badgeClass}">
+                                    ${item.stock} restant${item.stock > 1 ? 's' : ''}
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
         }
@@ -271,9 +305,10 @@
             return vehiclesList.map(v => {
                 const client = appState.clients.find(c => c.id === v.clientId) || { name: 'Client Inconnu', phone: '' };
                 const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+
                 return `
-                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md">
-                        <div class="flex justify-between items-start mb-2">
+                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md space-y-2">
+                        <div class="flex justify-between items-start">
                             <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
                                 <span class="text-base">${countryMeta.flag}</span>
                                 <span class="font-mono font-bold text-white text-sm tracking-wide">${v.plate}</span>
@@ -293,261 +328,148 @@
         }
 
         function filterVehicles(query) {
-            const q = query.toLowerCase();
+            const q = query.trim().toLowerCase();
+            const container = document.getElementById('search-results-container');
+            if (!q) {
+                container.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i> Stocks Restants
+                        </h4>
+                        <span class="text-[11px] text-slate-500">${appState.catalog.length} produits</span>
+                    </div>
+                    ${renderRemainingStocksList()}
+                `;
+                return;
+            }
             const filtered = appState.vehicles.filter(v => {
                 const client = appState.clients.find(c => c.id === v.clientId) || {};
                 return v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q) || (client.name && client.name.toLowerCase().includes(q));
             });
-            document.getElementById('search-results-container').innerHTML = `
+            container.innerHTML = `
                 <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche</h4>
                 ${renderVehicleList(filtered)}
             `;
         }
 
-        // --- SCANNER DE PLAQUE & OCR ---
-        let scannerStream = null;
-        let tesseractWorkerPromise = null;
-
-        function loadTesseract() {
-            if (window.Tesseract) return Promise.resolve(window.Tesseract);
-            return new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-                s.onload = () => resolve(window.Tesseract);
-                s.onerror = () => reject(new Error("Impossible de charger le moteur OCR."));
-                document.head.appendChild(s);
-            });
-        }
-
-        function getOcrWorker() {
-            if (!tesseractWorkerPromise) {
-                tesseractWorkerPromise = loadTesseract().then(async T => {
-                    const worker = await T.createWorker('eng');
-                    await worker.setParameters({
-                        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ- ',
-                        tessedit_pageseg_mode: '7'
-                    });
-                    return worker;
-                }).catch(err => { tesseractWorkerPromise = null; throw err; });
-            }
-            return tesseractWorkerPromise;
-        }
-
-        function setScanStatus(msg, isError) {
-            const el = document.getElementById('scan-status');
-            if (!el) return;
-            el.textContent = msg;
-            el.className = 'text-xs text-center min-h-[1rem] ' + (isError ? 'text-red-400' : 'text-slate-400');
-        }
-
-        async function openPlateScanner() {
+        // --- SCANNER UNIFIÉ (PLAQUE, CODE-BARRE & QR CODE) ---
+        function openPlateScanner() {
             closePlateScanner();
             const modal = document.createElement('div');
             modal.id = 'scanner-modal';
             modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
             modal.innerHTML = `
-                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
                     <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-camera text-blue-500 mr-2"></i>Scanner une plaque</h3>
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-qrcode text-blue-500 mr-2"></i>Scanner Plaque, Code-barre ou QR</h3>
                         <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
                     </div>
-                    
-                    <div id="scan-video-wrap" class="relative bg-black rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center">
-                        <video id="scan-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                        <div class="absolute left-[8%] right-[8%] top-[38%] h-[24%] border-2 border-blue-400 rounded-lg pointer-events-none"></div>
-                    </div>
 
-                    <p id="scan-status" class="text-xs text-center text-slate-400 min-h-[1rem]">Prêt à scanner...</p>
-                    
-                    <div class="space-y-2">
-                        <label class="w-full bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-lg shadow-blue-600/30">
-                            <i class="fa-solid fa-camera-retro mr-2"></i> Prendre une photo de la plaque
-                            <input type="file" accept="image/*" capture="environment" class="hidden" onchange="scanFromFile(this)">
-                        </label>
-                        <button id="scan-capture-btn" onclick="captureFromVideo()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium">
-                            <i class="fa-solid fa-circle-dot mr-2"></i> Capturer le flux vidéo
-                        </button>
-                    </div>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <p class="text-xs text-slate-300">Scannez un code produit (barre / QR) ou saisissez/prenez en photo une plaque :</p>
+                        
+                        <input id="scan-plate-result" type="text" placeholder="Ex: 01234-116-16 ou Code produit" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
 
-                    <div class="space-y-2 pt-1 border-t border-slate-800">
-                        <label class="text-xs text-slate-400">Plaque détectée / modifiable</label>
-                        <input id="scan-plate-result" type="text" placeholder="ex: 12456-124-16" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white font-mono uppercase focus:outline-none focus:border-blue-500">
-                        <button onclick="confirmScannedPlate()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-2.5 rounded-xl font-medium">
-                            <i class="fa-solid fa-check mr-2"></i> Valider et ouvrir le véhicule
-                        </button>
+                        <div class="flex space-x-2 pt-1">
+                            <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
+                                <i class="fa-solid fa-camera-retro mr-1.5"></i> Photo / Scanner
+                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleBarcodeOrPlateCapture(this)">
+                            </label>
+                            <button onclick="confirmScannedCode()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                                <i class="fa-solid fa-check mr-1.5"></i> Valider
+                            </button>
+                        </div>
                     </div>
+                    <p class="text-[11px] text-slate-500 text-center">Reconnaît les plaques d'immatriculation ainsi que les codes-barres et QR codes des articles en stock.</p>
                 </div>`;
             document.body.appendChild(modal);
-
-            getOcrWorker().catch(() => {});
-
-            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setScanStatus("Flux direct non supporté : utilisez le bouton photo ci-dessus.", true);
-                return;
-            }
-            try {
-                scannerStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: false
-                });
-                const video = document.getElementById('scan-video');
-                if (!video) { stopScannerStream(); return; }
-                video.srcObject = scannerStream;
-                await video.play().catch(() => {});
-                setScanStatus("Cadrez la plaque ou prenez une photo directe.");
-            } catch (err) {
-                setScanStatus("Caméra en direct indisponible. Utilisez le bouton photo.", true);
-            }
-        }
-
-        function stopScannerStream() {
-            if (scannerStream) {
-                scannerStream.getTracks().forEach(t => t.stop());
-                scannerStream = null;
-            }
+            setTimeout(() => { document.getElementById('scan-plate-result')?.focus(); }, 100);
         }
 
         function closePlateScanner() {
-            stopScannerStream();
             const m = document.getElementById('scanner-modal');
             if (m) m.remove();
         }
 
-        function preprocessForOcr(source, sw, sh, crop) {
-            const sx = crop ? sw * 0.08 : 0, sy = crop ? sh * 0.38 : 0;
-            const cw = crop ? sw * 0.84 : sw, ch = crop ? sh * 0.24 : sh;
-            const scale = Math.min(1, 1600 / cw) * (cw < 800 ? 2 : 1);
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.round(cw * scale);
-            canvas.height = Math.round(ch * scale);
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(source, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
-            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const d = img.data;
-            for (let i = 0; i < d.length; i += 4) {
-                let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-                g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
-                d[i] = d[i + 1] = d[i + 2] = g;
-            }
-            ctx.putImageData(img, 0, 0);
-            return canvas;
-        }
-
-        function captureFromVideo() {
-            const video = document.getElementById('scan-video');
-            if (!video || !video.videoWidth) { setScanStatus("La caméra n'est pas prête.", true); return; }
-            const vw = video.videoWidth, vh = video.videoHeight;
-            const ew = video.clientWidth, eh = video.clientHeight;
-            const s = Math.max(ew / vw, eh / vh);
-            const visW = ew / s, visH = eh / s;
-            const offX = (vw - visW) / 2, offY = (vh - visH) / 2;
-            const tmp = document.createElement('canvas');
-            tmp.width = Math.round(visW); tmp.height = Math.round(visH);
-            tmp.getContext('2d').drawImage(video, offX, offY, visW, visH, 0, 0, tmp.width, tmp.height);
-            runOcr([preprocessForOcr(tmp, tmp.width, tmp.height, true)]);
-        }
-
-        function scanFromFile(input) {
+        function handleBarcodeOrPlateCapture(input) {
             const file = input.files && input.files[0];
             if (!file) return;
-            const url = URL.createObjectURL(file);
-            const img = new Image();
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-                const w = img.naturalWidth, h = img.naturalHeight;
-                runOcr([preprocessForOcr(img, w, h, true), preprocessForOcr(img, w, h, false)]);
-            };
-            img.onerror = () => setScanStatus("Image illisible.", true);
-            img.src = url;
+            const inputField = document.getElementById('scan-plate-result');
+            if(inputField) {
+                inputField.placeholder = "Code/Plaque capturé en image";
+            }
             input.value = '';
         }
 
-        function extractPlate(text) {
-            const t = (text || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ');
-            const compact = t.replace(/\s+/g, '');
-            let m = compact.match(/(\d{5,6})(\d{3})(\d{2})/);
-            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-            m = compact.match(/([A-Z]{2})(\d{3})([A-Z]{2})/);
-            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-            const tokens = t.trim().split(/\s+/).filter(x => /\d/.test(x) && x.length >= 4);
-            if (tokens.length) return tokens.sort((a, b) => b.length - a.length)[0];
-            return compact.length >= 4 ? compact : '';
-        }
-
-        async function runOcr(canvases) {
-            setScanStatus("Analyse de la plaque en cours...");
-            try {
-                const worker = await getOcrWorker();
-                let plate = '';
-                for (const c of canvases) {
-                    const { data } = await worker.recognize(c);
-                    plate = extractPlate(data.text);
-                    if (plate) break;
-                }
-                const out = document.getElementById('scan-plate-result');
-                if (!out) return;
-                if (plate) {
-                    out.value = plate;
-                    setScanStatus("Plaque lue avec succès ! Vérifiez puis validez.");
-                } else {
-                    setScanStatus("Plaque non reconnue clairement. Saisissez-la manuellement ci-dessous.", true);
-                    out.focus();
-                }
-            } catch (err) {
-                setScanStatus("Erreur d'analyse OCR.", true);
-            }
-        }
-
-        function confirmScannedPlate() {
+        function confirmScannedCode() {
             const input = document.getElementById('scan-plate-result');
-            const plate = (input ? input.value : '').trim().toUpperCase();
-            if (!plate) { setScanStatus("Veuillez entrer ou scanner une plaque.", true); return; }
-            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const codeVal = (input ? input.value : '').trim().toUpperCase();
+            if (!codeVal) {
+                alert("Veuillez saisir ou scanner un code.");
+                return;
+            }
             closePlateScanner();
 
-            const existing = appState.vehicles.find(v => norm(v.plate) === norm(plate));
-            if (existing) { openVehicleDetail(existing.id); return; }
+            // Vérifier si c'est un article du catalogue (par code ou nom)
+            const catalogItem = appState.catalog.find(c => c.name.toUpperCase().includes(codeVal) || c.id.toString() === codeVal);
+            if (catalogItem) {
+                alert(`Article trouvé en stock : ${catalogItem.name} (${catalogItem.stock} restants, ${catalogItem.price} DA)`);
+                return;
+            }
 
-            if (!confirm(`Plaque ${plate} inconnue. Enregistrer un nouveau véhicule ?`)) return;
-            const name = prompt("Nom complet du client :", "") || "Client " + plate;
+            // Sinon, traiter comme une plaque d'immatriculation véhicule
+            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const existing = appState.vehicles.find(v => norm(v.plate) === norm(codeVal));
+            if (existing) {
+                openVehicleDetail(existing.id);
+                return;
+            }
+
+            if (!confirm(`Le code/plaque "${codeVal}" est inconnu. Enregistrer un nouveau véhicule ?`)) return;
+            
+            const name = prompt("Nom complet du client :", "") || "Client " + codeVal;
             const phone = prompt("Numéro de téléphone :", "+213 ") || "";
-            const model = prompt("Modèle du véhicule :", "") || "Non renseigné";
-            const country = /^\d{5,6}-\d{3}-\d{2}$/.test(plate) ? 'DZ' : (/^[A-Z]{2}-\d{3}-[A-Z]{2}$/.test(plate) ? 'EU' : 'OTHER');
+            const model = prompt("Modèle du véhicule :", "") || "Véhicule";
+            const mileageInput = prompt("Kilométrage actuel :", "0");
+            const mileage = parseInt(mileageInput) || 0;
+            const country = codeVal.includes('-') && codeVal.length >= 10 ? 'DZ' : 'EU';
 
             const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
             appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            
             const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 0, country });
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate: codeVal, model, mileage, country });
+            
             saveState();
+            renderApp();
             openVehicleDetail(newVehId);
         }
 
-        function openNewClientModal() {
-            const name = prompt("Nom du nouveau client :");
-            if(!name) return;
-            const phone = prompt("Téléphone :", "+213 ");
-            const plate = prompt("Plaque d'immatriculation (ex: 01234-116-16) :").toUpperCase();
-            if(!plate) return;
-            const model = prompt("Modèle du véhicule :") || "Véhicule";
-
-            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
-            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
-            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
-            const country = /^\d{5,6}-\d{3}-\d{2}$/.test(plate) ? 'DZ' : 'OTHER';
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 0, country });
-            saveState();
-            renderApp();
-        }
-
         // --- VUE DETAIL VEHICULE & HISTORIQUE ---
+        let selectedVehicleId = null;
         function openVehicleDetail(vehId) {
-            appState.selectedVehicleId = vehId;
+            selectedVehicleId = vehId;
             appState.currentView = 'vehicle_detail';
             renderApp();
         }
 
+        function updateVehicleMileage(vehId) {
+            const v = appState.vehicles.find(item => item.id === vehId);
+            if (!v) return;
+            const newKmInput = prompt(`Modifier le kilométrage pour ${v.plate} :`, v.mileage);
+            if (newKmInput === null) return;
+            const newKm = parseInt(newKmInput);
+            if (isNaN(newKm) || newKm < 0) {
+                alert("Kilométrage invalide.");
+                return;
+            }
+            v.mileage = newKm;
+            saveState();
+            renderApp();
+        }
+
         function renderVehicleDetailView() {
-            const v = appState.vehicles.find(item => item.id === appState.selectedVehicleId);
+            const v = appState.vehicles.find(item => item.id === selectedVehicleId);
             if(!v) return `<p class="text-center text-slate-400">Véhicule introuvable.</p>`;
             const client = appState.clients.find(c => c.id === v.clientId) || {};
             const passages = appState.passages.filter(p => p.vehicleId === v.id);
@@ -564,206 +486,36 @@
                                 <span class="text-lg">${countryMeta.flag}</span>
                                 <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
                             </div>
-                            <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                                <button onclick="updateVehicleMileage(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded-lg text-xs border border-slate-700" title="Modifier le kilométrage">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-white">${v.model}</h3>
-                            <p class="text-xs text-slate-400 mt-1"><i class="fa-solid fa-user mr-1"></i> ${client.name} — ${client.phone}</p>
+                            <p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-user mr-1"></i> ${client.name} — <i class="fa-solid fa-phone ml-2 mr-1"></i> ${client.phone}</p>
                         </div>
-                        <div class="flex space-x-2 pt-2">
-                            <button onclick="startBillingForVehicle(${v.id})" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition shadow-md shadow-blue-600/30">
-                                <i class="fa-solid fa-cash-register mr-2"></i> Nouveau Passage / Caisse
+                        <div class="pt-2 border-t border-slate-800 flex space-x-2">
+                            <button onclick="quickInvoiceForVehicle(${v.id})" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition shadow-md shadow-blue-600/20 flex items-center justify-center">
+                                <i class="fa-solid fa-cash-register mr-2"></i> Encaisser Prestation
                             </button>
                         </div>
                     </div>
-
                     <div class="space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique des passages</h4>
-                        ${passages.length === 0 ? `<p class="text-xs text-slate-500 italic bg-slate-900/40 p-4 rounded-xl border border-slate-800">Aucun passage enregistré pour ce véhicule.</p>` : passages.map(p => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
-                                <div class="flex justify-between text-xs text-slate-400">
-                                    <span><i class="fa-solid fa-calendar mr-1"></i> ${p.date}</span>
-                                    <span class="text-blue-400 font-medium">${p.mileage.toLocaleString()} km</span>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique Lavages & Vidanges</h4>
+                        ${passages.length === 0 ? `<p class="text-xs text-slate-400 text-center py-6">Aucun historique.</p>` : passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-slate-400"><i class="fa-solid fa-calendar mr-1"></i> ${p.date}</span>
+                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
                                 </div>
-                                <div class="flex flex-wrap gap-1">
-                                    ${p.items.map(i => `<span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md">${i}</span>`).join('')}
-                                </div>
-                                <div class="flex justify-between items-center pt-2 border-t border-slate-800">
-                                    <span class="text-xs text-slate-400">Prochaine vidange : <strong class="text-white">${p.nextVidangeKm ? p.nextVidangeKm.toLocaleString() + ' km' : 'N/C'}</strong></span>
-                                    <span class="text-sm font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    ${p.items.map(i => `<span class="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] px-2 py-0.5 rounded-lg">${i}</span>`).join('')}
                                 </div>
                             </div>
                         `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- VUE CAISSE & ENCAISSEMENT ---
-        function startBillingForVehicle(vehId) {
-            appState.activeCart = { vehicleId: vehId, items: [] };
-            switchView('billing');
-        }
-
-        function renderBillingView() {
-            const vehicle = appState.vehicles.find(v => v.id === appState.activeCart.vehicleId);
-            const total = appState.activeCart.items.reduce((sum, item) => sum + item.price, 0);
-
-            return `
-                <div class="space-y-5">
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex justify-between items-center">
-                        <div>
-                            <h3 class="text-sm font-semibold text-white">Caisse & Prestations</h3>
-                            <p class="text-xs text-slate-400">${vehicle ? 'Véhicule : ' + vehicle.plate : 'Aucun véhicule sélectionné'}</p>
-                        </div>
-                        <button onclick="selectVehicleForCart()" class="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-2 rounded-xl transition">
-                            ${vehicle ? 'Changer' : 'Sélectionner véhicule'}
-                        </button>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        ${appState.catalog.map(item => `
-                            <button onclick="addToCart(${item.id})" class="bg-slate-900 hover:bg-slate-800 border border-slate-800 p-3 rounded-xl text-left transition flex flex-col justify-between space-y-2">
-                                <span class="text-xs font-semibold text-white line-clamp-2">${item.name}</span>
-                                <div class="flex justify-between items-center w-full">
-                                    <span class="text-xs font-bold text-blue-400">${item.price.toLocaleString()} DA</span>
-                                    <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">${item.category}</span>
-                                </div>
-                            </button>
-                        `).join('')}
-                    </div>
-
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Panier en cours</h4>
-                        ${appState.activeCart.items.length === 0 ? `<p class="text-xs text-slate-500 italic">Le panier est vide.</p>` : `
-                            <div class="space-y-2 max-h-40 overflow-y-auto">
-                                ${appState.activeCart.items.map((it, idx) => `
-                                    <div class="flex justify-between items-center text-xs bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                                        <span class="text-slate-200">${it.name}</span>
-                                        <div class="flex items-center space-x-3">
-                                            <span class="font-bold text-white">${it.price.toLocaleString()} DA</span>
-                                            <button onclick="removeFromCart(${idx})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div class="pt-3 border-t border-slate-800 flex justify-between items-center">
-                                <span class="text-sm font-semibold text-white">Total à encaisser :</span>
-                                <span class="text-base font-bold text-emerald-400">${total.toLocaleString()} DA</span>
-                            </div>
-                            <button onclick="validateCheckout()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-3 rounded-xl transition shadow-lg shadow-emerald-600/20">
-                                <i class="fa-solid fa-check-circle mr-2"></i> Valider l'Encaissement
-                            </button>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
-        function selectVehicleForCart() {
-            const plate = prompt("Entrez la plaque du véhicule pour la caisse :").toUpperCase();
-            if(!plate) return;
-            const found = appState.vehicles.find(v => v.plate.toUpperCase() === plate);
-            if(!found) {
-                alert("Véhicule introuvable.");
-                return;
-            }
-            appState.activeCart.vehicleId = found.id;
-            renderApp();
-        }
-
-        function addToCart(catalogId) {
-            const item = appState.catalog.find(c => c.id === catalogId);
-            if(item) {
-                appState.activeCart.items.push({ ...item });
-                renderApp();
-            }
-        }
-
-        function removeFromCart(index) {
-            appState.activeCart.items.splice(index, 1);
-            renderApp();
-        }
-
-        function validateCheckout() {
-            if(!appState.activeCart.vehicleId) {
-                alert("Veuillez associer un véhicule au panier avant d'encaisser.");
-                selectVehicleForCart();
-                return;
-            }
-            if(appState.activeCart.items.length === 0) {
-                alert("Le panier est vide.");
-                return;
-            }
-
-            const vehicle = appState.vehicles.find(v => v.id === appState.activeCart.vehicleId);
-            const total = appState.activeCart.items.reduce((s, i) => s + i.price, 0);
-            const currentMileage = vehicle.mileage || 0;
-            const newMileage = parseInt(prompt(`Kilométrage actuel du véhicule (${currentMileage} km) :`, currentMileage)) || currentMileage;
-            
-            vehicle.mileage = newMileage;
-            let nextVidange = null;
-            if(appState.activeCart.items.some(i => i.category === 'VIDANGE')) {
-                nextVidange = newMileage + 10000;
-            }
-
-            const now = new Date();
-            const dateStr = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
-
-            appState.passages.unshift({
-                id: Date.now(),
-                vehicleId: vehicle.id,
-                date: dateStr,
-                mileage: newMileage,
-                nextVidangeKm: nextVidange,
-                totalAmount: total,
-                items: appState.activeCart.items.map(i => i.name)
-            });
-
-            const client = appState.clients.find(c => c.id === vehicle.clientId);
-            if(client) client.totalSpent = (client.totalSpent || 0) + total;
-
-            saveState();
-            appState.activeCart = { vehicleId: null, items: [] };
-            alert(`Encaissement validé avec succès ! Total : ${total.toLocaleString()} DA`);
-            switchView('journal');
-        }
-
-        // --- VUE JOURNAL ---
-        function renderJournalView() {
-            const totalRevenue = appState.passages.reduce((sum, p) => sum + p.totalAmount, 0);
-            return `
-                <div class="space-y-5">
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex justify-between items-center">
-                        <div>
-                            <h3 class="text-sm font-semibold text-white">Journal des Passages</h3>
-                            <p class="text-xs text-slate-400">${appState.passages.length} prestations enregistrées</p>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-[10px] text-slate-400 block uppercase">Chiffre d'affaires</span>
-                            <span class="text-sm font-bold text-emerald-400">${totalRevenue.toLocaleString()} DA</span>
-                        </div>
-                    </div>
-
-                    <div class="space-y-3">
-                        ${appState.passages.map(p => {
-                            const vehicle = appState.vehicles.find(v => v.id === p.vehicleId) || { plate: 'Inconnu', model: '' };
-                            return `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                                    <div class="flex justify-between items-center">
-                                        <span class="font-mono font-bold text-white text-xs bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">${vehicle.plate}</span>
-                                        <span class="text-xs text-slate-400">${p.date}</span>
-                                    </div>
-                                    <div class="flex flex-wrap gap-1 pt-1">
-                                        ${p.items.map(i => `<span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md">${i}</span>`).join('')}
-                                    </div>
-                                    <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-xs">
-                                        <span class="text-slate-400">${vehicle.model}</span>
-                                        <span class="font-bold text-emerald-400 text-sm">${p.totalAmount.toLocaleString()} DA</span>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
                     </div>
                 </div>
             `;
@@ -772,61 +524,25 @@
         // --- VUE CLIENTS ---
         function renderClientsView() {
             return `
-                <div class="space-y-5">
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex justify-between items-center">
-                        <div>
-                            <h3 class="text-sm font-semibold text-white">Annuaire Clients</h3>
-                            <p class="text-xs text-slate-400">${appState.clients.length} clients enregistrés</p>
-                        </div>
-                        <button onclick="openNewClientModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-2 rounded-xl transition font-medium">
-                            <i class="fa-solid fa-user-plus mr-1"></i> Ajouter
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white">Répertoire Clients (${appState.clients.length})</h3>
+                        <button onclick="openNewClientModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-2 rounded-xl transition">
+                            <i class="fa-solid fa-user-plus mr-1"></i> Nouveau
                         </button>
                     </div>
-
                     <div class="space-y-3">
-                        ${appState.clients.map(c => {
-                            const vCount = appState.vehicles.filter(v => v.clientId === c.id).length;
-                            return `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <h4 class="text-sm font-bold text-white">${c.name}</h4>
-                                            <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i> ${c.phone}</p>
-                                        </div>
-                                        <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full">${vCount} véhicule(s)</span>
+                        ${appState.clients.map(c => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h4 class="text-sm font-bold text-white">${c.name}</h4>
+                                        <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i> ${c.phone}</p>
                                     </div>
-                                    <div class="flex justify-between items-center pt-2 border-t border-slate-800 text-xs">
-                                        <span class="text-slate-400">Total dépensé</span>
-                                        <span class="font-bold text-emerald-400">${(c.totalSpent || 0).toLocaleString()} DA</span>
+                                    <div class="text-right">
+                                        <span class="text-xs font-bold text-emerald-400">${c.totalSpent.toLocaleString()} DA</span>
                                     </div>
                                 </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- VUE ADMIN ---
-        function renderAdminView() {
-            return `
-                <div class="space-y-5">
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
-                        <h3 class="text-sm font-semibold text-white mb-1"><i class="fa-solid fa-shield-halved text-amber-400 mr-2"></i>Administration</h3>
-                        <p class="text-xs text-slate-400">Gestion des utilisateurs et du catalogue</p>
-                    </div>
-
-                    <div class="space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Comptes Employés</h4>
-                        ${appState.users.map(u => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex justify-between items-center text-xs">
-                                <div>
-                                    <div class="font-bold text-white">${u.name} (<span class="font-mono text-slate-400">${u.username}</span>)</div>
-                                    <div class="text-slate-400 mt-0.5">Rôle : <strong class="text-slate-200">${ROLES_CONFIG[u.role].label}</strong> | PIN : <strong class="text-amber-400 font-mono">${u.pin}</strong></div>
-                                </div>
-                                <button onclick="toggleUserActive(${u.id})" class="px-3 py-1.5 rounded-lg border transition ${u.active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'}">
-                                    ${u.active ? 'Actif' : 'Suspendu'}
-                                </button>
                             </div>
                         `).join('')}
                     </div>
@@ -834,19 +550,263 @@
             `;
         }
 
-        function toggleUserActive(userId) {
-            const u = appState.users.find(user => user.id === userId);
-            if(u && u.username !== 'admin') {
-                u.active = !u.active;
-                saveState();
-                renderApp();
-            } else {
-                alert("Impossible de modifier le compte administrateur principal.");
-            }
+        // --- FACTURATION (DÉDUCTION DU STOCK RESTANT) ---
+        let billingCart = [];
+        let billingVehicleId = null;
+
+        function quickInvoiceForVehicle(vehId) {
+            billingVehicleId = vehId;
+            billingCart = [];
+            appState.currentView = 'billing';
+            renderApp();
         }
 
-        // --- INITIALISATION ---
-        renderApp();
+        function renderBillingView() {
+            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-cash-register text-blue-500 mr-2"></i> Caisse & Facturation
+                    </h3>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-medium text-slate-400">Véhicule concerné</label>
+                        <select id="billing-veh-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
+                            ${appState.vehicles.map(v => `<option value="${v.id}" ${billingVehicleId === v.id ? 'selected' : ''}>${v.plate} - ${v.model}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Catalogue & Stocks Restants</h4>
+                        <div class="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                            ${appState.catalog.map(item => `
+                                <div class="flex justify-between items-center bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
+                                    <div>
+                                        <span class="text-xs font-medium text-white block">${item.name}</span>
+                                        <span class="text-[10px] text-blue-400 font-bold">${item.price.toLocaleString()} DA • Restant: <strong class="text-emerald-400">${item.stock}</strong></span>
+                                    </div>
+                                    <button onclick="addToBillingCart(${item.id})" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition border border-blue-500/30">
+                                        <i class="fa-solid fa-plus"></i> Ajouter
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Panier en cours</h4>
+                        ${billingCart.length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">Aucun article</p>` : `
+                            <div class="space-y-2">
+                                ${billingCart.map((item, idx) => `
+                                    <div class="flex justify-between items-center text-xs bg-slate-950 p-2 rounded-xl">
+                                        <span class="text-slate-200">${item.name} (x${item.qty})</span>
+                                        <span class="font-bold text-white">${(item.price * item.qty).toLocaleString()} DA</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-sm font-bold">
+                                <span class="text-white">Total :</span>
+                                <span class="text-emerald-400 text-base">${total.toLocaleString()} DA</span>
+                            </div>
+                            <button onclick="validateBilling()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition text-xs">
+                                Valider & Encaisser
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function addToBillingCart(catalogId) {
+            const item = appState.catalog.find(c => c.id === catalogId);
+            if(!item) return;
+            if(item.stock <= 0) {
+                alert("Stock épuisé pour cet article !");
+                return;
+            }
+            const existing = billingCart.find(i => i.id === catalogId);
+            if(existing) existing.qty++; else billingCart.push({ ...item, qty: 1 });
+            renderApp();
+        }
+
+        function validateBilling() {
+            if(billingCart.length === 0) return;
+            const vehId = parseInt(document.getElementById('billing-veh-select').value);
+            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+            billingCart.forEach(cartItem => {
+                const catItem = appState.catalog.find(c => c.id === cartItem.id);
+                if(catItem) {
+                    catItem.stock = Math.max(0, catItem.stock - cartItem.qty);
+                }
+            });
+
+            appState.passages.unshift({
+                id: appState.passages.length + 1,
+                vehicleId: vehId,
+                date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                totalAmount: total,
+                items: billingCart.map(i => `${i.name} (x${i.qty})`)
+            });
+            saveState();
+            billingCart = [];
+            alert("Paiement validé et stocks mis à jour avec succès !");
+            switchView('journal');
+        }
+
+        // --- JOURNAL ---
+        function renderJournalView() {
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white">Journal des Encaissements</h3>
+                    <div class="space-y-3">
+                        ${appState.passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-blue-400 font-mono font-bold">Passage #${p.id}</span>
+                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
+                                </div>
+                                <div class="text-xs text-slate-300">
+                                    ${p.items.join(', ')}
+                                </div>
+                                <div class="text-[10px] text-slate-500 text-right">${p.date}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- ADMIN & GESTION DES STOCKS ---
+        function renderAdminView() {
+            if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-shield-halved text-amber-500 mr-2"></i> Espace Administrateur
+                    </h3>
+                    <div class="flex space-x-2 border-b border-slate-800 pb-2">
+                        <button onclick="setAdminTab('users')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='users'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Équipe</button>
+                        <button onclick="setAdminTab('catalog')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='catalog'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Tarifs & Stocks</button>
+                    </div>
+                    ${appState.adminTab === 'users' ? renderUsersAdminSection() : renderCatalogAdminSection()}
+                </div>
+            `;
+        }
+
+        function setAdminTab(tab) { appState.adminTab = tab; renderApp(); }
+
+        function renderUsersAdminSection() {
+            return `
+                <div class="space-y-4">
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Membres de l'équipe</h4>
+                        ${appState.users.map(u => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+                                <div>
+                                    <h5 class="text-xs font-bold text-white">${u.name}</h5>
+                                    <p class="text-[10px] text-slate-400">ID: ${u.username} • Rôle: ${u.role}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCatalogAdminSection() {
+            return `
+                <div class="space-y-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un produit / service</h4>
+                        <form onsubmit="addNewCatalogItem(event)" class="space-y-3">
+                            <input type="text" id="cat-name" required placeholder="Nom (ex: Filtre à Huile)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            <div class="grid grid-cols-3 gap-2">
+                                <select id="cat-category" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="LAVAGE">Lavage</option>
+                                    <option value="VIDANGE">Vidange</option>
+                                    <option value="FILTRE">Filtre</option>
+                                    <option value="ACCESSOIRE">Accessoire</option>
+                                </select>
+                                <input type="number" id="cat-price" required placeholder="Prix (DA)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                <input type="number" id="cat-stock" required placeholder="Stock" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition">Ajouter au catalogue</button>
+                        </form>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Modifier les prix et stocks restants</h4>
+                        ${appState.catalog.map(item => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+                                <div>
+                                    <h5 class="text-xs font-bold text-white">${item.name}</h5>
+                                    <span class="text-[10px] text-slate-400">${item.category}</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-20 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Prix (DA)">
+                                    <input type="number" value="${item.stock}" onchange="updateCatalogStock(${item.id}, this.value)" class="w-16 bg-slate-950 border border-slate-800 text-xs text-blue-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Stock restant">
+                                    <button onclick="deleteCatalogItem(${item.id})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateCatalogPrice(itemId, newPrice) {
+            const item = appState.catalog.find(c => c.id === itemId);
+            if(item) { item.price = parseFloat(newPrice) || 0; saveState(); }
+        }
+
+        function updateCatalogStock(itemId, newStock) {
+            const item = appState.catalog.find(c => c.id === itemId);
+            if(item) { item.stock = parseInt(newStock) || 0; saveState(); }
+        }
+
+        function addNewCatalogItem(e) {
+            e.preventDefault();
+            const name = document.getElementById('cat-name').value.trim();
+            const category = document.getElementById('cat-category').value;
+            const price = parseFloat(document.getElementById('cat-price').value);
+            const stock = parseInt(document.getElementById('cat-stock').value) || 0;
+
+            appState.catalog.push({ id: appState.catalog.length + 1, name, category, price, stock });
+            saveState();
+            renderApp();
+        }
+
+        function deleteCatalogItem(itemId) {
+            appState.catalog = appState.catalog.filter(c => c.id !== itemId);
+            saveState();
+            renderApp();
+        }
+
+        function openNewClientModal() {
+            const name = prompt("Nom complet du client :");
+            if(!name) return;
+            const phone = prompt("Numéro de téléphone :", "+213 ");
+            if(!phone) return;
+            const plate = prompt("Plaque d'immatriculation (ex: 12456-124-16) :").toUpperCase();
+            if(!plate) return;
+            const model = prompt("Modèle du véhicule :") || "Véhicule";
+            const mileageInput = prompt("Kilométrage actuel :", "0");
+            const mileage = parseInt(mileageInput) || 0;
+
+            const newClientId = appState.clients.length + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            const newVehId = appState.vehicles.length + 1;
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage, country: 'DZ' });
+            saveState();
+            renderApp();
+            openVehicleDetail(newVehId);
+        }
+
+        window.onload = function() {
+            if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+                location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+                return;
+            }
+            renderApp();
+        };
     </script>
 </body>
 </html>
