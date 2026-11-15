@@ -447,7 +447,7 @@
             openVehicleDetail(newVehId);
         }
 
-        // --- VUE DETAIL VEHICULE & HISTORIQUE ---
+        // --- VUE DETAIL VEHICULE, CLIENT & PARAMÈTRES ---
         let selectedVehicleId = null;
         function openVehicleDetail(vehId) {
             selectedVehicleId = vehId;
@@ -455,19 +455,32 @@
             renderApp();
         }
 
-        function updateVehicleMileage(vehId) {
+        function editVehicleAndClientParams(vehId) {
             const v = appState.vehicles.find(item => item.id === vehId);
             if (!v) return;
-            const newKmInput = prompt(`Modifier le kilométrage pour ${v.plate} :`, v.mileage);
-            if (newKmInput === null) return;
-            const newKm = parseInt(newKmInput);
-            if (isNaN(newKm) || newKm < 0) {
-                alert("Kilométrage invalide.");
-                return;
-            }
-            v.mileage = newKm;
+            const client = appState.clients.find(c => c.id === v.clientId) || { name: '', phone: '' };
+
+            const newPlate = prompt("Modifier la plaque d'immatriculation :", v.plate);
+            if (newPlate === null) return;
+            const newModel = prompt("Modifier le modèle du véhicule :", v.model);
+            if (newModel === null) return;
+            const newKm = prompt("Modifier le kilométrage actuel :", v.mileage);
+            if (newKm === null) return;
+            const newClientName = prompt("Modifier le nom du client propriétaire :", client.name);
+            if (newClientName === null) return;
+            const newClientPhone = prompt("Modifier le téléphone du client :", client.phone);
+            if (newClientPhone === null) return;
+
+            v.plate = newPlate.trim().toUpperCase();
+            v.model = newModel.trim();
+            v.mileage = parseInt(newKm) || v.mileage;
+
+            client.name = newClientName.trim();
+            client.phone = newClientPhone.trim();
+
             saveState();
             renderApp();
+            alert("Paramètres du véhicule et du client mis à jour avec succès !");
         }
 
         function renderVehicleDetailView() {
@@ -479,21 +492,22 @@
 
             return `
                 <div class="space-y-6">
-                    <button onclick="switchView('home')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                        <i class="fa-solid fa-arrow-left mr-2"></i> Retour à l'accueil
-                    </button>
+                    <div class="flex justify-between items-center">
+                        <button onclick="switchView('home')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                            <i class="fa-solid fa-arrow-left mr-2"></i> Retour à l'accueil
+                        </button>
+                        <button onclick="editVehicleAndClientParams(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-pen-to-square"></i> Modifier Paramètres / KM
+                        </button>
+                    </div>
+
                     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
                         <div class="flex justify-between items-start">
                             <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
                                 <span class="text-lg">${countryMeta.flag}</span>
                                 <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
-                                <button onclick="updateVehicleMileage(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded-lg text-xs border border-slate-700" title="Modifier le kilométrage">
-                                    <i class="fa-solid fa-pen-to-square"></i>
-                                </button>
-                            </div>
+                            <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-white">${v.model}</h3>
