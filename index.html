@@ -1,1358 +1,490 @@
 <!DOCTYPE html>
-<html lang="fr" class="dark">
+<html lang="fr" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AZ-AutoClean - Gestion Station Lavage & Vidange</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AZ-AutoClean | Gestion Pro & Caisse</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- jsQR for Barcode / QR Code scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #020617;
-            color: #f8fafc;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        @keyframes scanline {
-            0% { top: 10%; }
-            50% { top: 85%; }
-            100% { top: 10%; }
-        }
-        .animate-scanline {
-            animation: scanline 2.2s ease-in-out infinite;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100 flex justify-center selection:bg-blue-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 h-full flex flex-col selection:bg-amber-500 selection:text-slate-950">
 
-    <!-- Conteneur Mobile Centré -->
-    <div id="app" class="w-full max-w-md min-h-screen bg-slate-950 border-x border-slate-900 flex flex-col relative shadow-2xl overflow-x-hidden">
-        <!-- Le contenu dynamique est injecté ici -->
+    <!-- CONTENEUR PRINCIPAL DE L'APPLICATION -->
+    <div id="app" class="flex-1 flex flex-col h-full max-w-md mx-auto w-full bg-slate-900 shadow-2xl relative overflow-hidden border-x border-slate-800">
+        <!-- Rendu dynamique géré par JavaScript -->
     </div>
 
-    <!-- Modale Générique -->
-    <div id="modal-backdrop" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div id="modal-container" class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 shadow-2xl transform transition-all max-h-[90vh] overflow-y-auto no-scrollbar">
-            <!-- Contenu modale -->
-        </div>
-    </div>
-
+    <!-- SCRIPT DE L'APPLICATION -->
     <script>
-        // ==========================================
-        // 1. ÉTAT GLOBAL & PERSISTANCE LOCALSTORAGE
-        // ==========================================
-        const DEFAULT_STATE = {
-            currentUser: null, // { id, name, role: 'admin'|'cashier'|'washer', pin }
-            currentView: 'home', // 'home', 'pos', 'journal', 'clients', 'admin'
-            selectedVehicleId: null,
-            users: [
-                { id: 1, name: 'Karim Benali', role: 'admin', pin: '1234', active: true },
-                { id: 2, name: 'Sofiane Hadj', role: 'cashier', pin: '5678', active: true },
-                { id: 3, name: 'Mourad Ziani', role: 'washer', pin: '0000', active: true }
+        // --- ÉTAT GLOBAL DE L'APPLICATION & DONNÉES LOCALES ---
+        let appState = {
+            currentUser: null, // { name, role: 'admin'|'cashier', pin }
+            currentTab: 'plates', // 'plates' ou 'products'
+            vehicles: JSON.parse(localStorage.getItem('az_vehicles')) || [
+                { id: 1, plate: '01234-116-16', brand: 'Renault Clio V', owner: 'Karim B.', km: 45200, nextVidange: 50000, status: 'Actif', lastWash: '12/11/2026' },
+                { id: 2, plate: '09876-108-31', brand: 'Peugeot 208', owner: 'Amine Z.', km: 78900, nextVidange: 80000, status: 'Urgent Vidange', lastWash: '01/10/2026' },
+                { id: 3, plate: '05432-119-09', brand: 'Volkswagen Golf 7', owner: 'Sofiane H.', km: 31000, nextVidange: 40000, status: 'Actif', lastWash: '14/11/2026' }
             ],
-            vehicles: [
-                { id: 101, plate: '01234-116-16', brandModel: 'Renault Symbol', owner: 'Amine Larbi', phone: '0555123456', mileage: 44500, nextOilMileage: 50000, lastService: '10/01/2026' },
-                { id: 102, plate: '09876-119-31', brandModel: 'Volkswagen Golf 7', owner: 'Rachid Kaci', phone: '0661987654', mileage: 88200, nextOilMileage: 90000, lastService: '02/02/2026' },
-                { id: 103, plate: '04512-108-16', brandModel: 'Hyundai Accent', owner: 'Samir Boudiaf', phone: '0770451278', mileage: 112000, nextOilMileage: 115000, lastService: '15/12/2025' }
+            products: JSON.parse(localStorage.getItem('az_products')) || [
+                { id: 'P001', name: 'Huile Moteur 5W40 Synthese', barcode: '6131000123456', price: 6500, stock: 14, category: 'Lubrifiant' },
+                { id: 'P002', name: 'Filtre à Huile Purflux', barcode: '3285930128941', price: 1800, stock: 22, category: 'Filtre' },
+                { id: 'P003', name: 'Shampoing Carrosserie Mousse', barcode: '6139998877665', price: 2500, stock: 8, category: 'Lavage' }
             ],
-            catalog: [
-                { id: 1, name: 'Lavage Complet (Intérieur + Extérieur)', type: 'service', price: 1500 },
-                { id: 2, name: 'Lavage Simple Extérieur', type: 'service', price: 800 },
-                { id: 3, name: 'Vidange Huile 5W40 (5L)', type: 'service', price: 6500 },
-                { id: 4, name: 'Huile Moteur Total 10W40 (5L)', type: 'product', price: 4200, stock: 18, barcode: '34259010' },
-                { id: 5, name: 'Filtre à Huile Purflux', type: 'product', price: 1200, stock: 24, barcode: '32859301' },
-                { id: 6, name: 'Liquide de Refroidissement 5L', type: 'product', price: 1800, stock: 10, barcode: '54100592' },
-                { id: 7, name: 'Lave-Glace Parfumé', type: 'product', price: 500, stock: 35, barcode: '76123489' }
-            ],
-            passages: [
-                { id: 1, clientName: 'Amine Larbi', plate: '01234-116-16', employeeName: 'Mourad Ziani', items: ['Lavage Complet (Intérieur + Extérieur)'], totalAmount: 1500, date: '15/02/2026 10:30' },
-                { id: 2, clientName: 'Rachid Kaci', plate: '09876-119-31', employeeName: 'Sofiane Hadj', items: ['Vidange Huile 5W40 (5L)', 'Filtre à Huile Purflux'], totalAmount: 7700, date: '15/02/2026 12:15' }
-            ],
-            posCart: []
+            activeScanMode: null // 'plate' ou 'product'
         };
 
-        let appState = loadState();
-
-        function loadState() {
-            const saved = localStorage.getItem('az_autoclean_state_v3');
-            if (saved) {
-                try { return JSON.parse(saved); } catch (e) { console.error(e); }
-            }
-            return JSON.parse(JSON.stringify(DEFAULT_STATE));
+        function saveToStorage() {
+            localStorage.setItem('az_vehicles', JSON.stringify(appState.vehicles));
+            localStorage.setItem('az_products', JSON.stringify(appState.products));
         }
 
-        function saveState() {
-            localStorage.setItem('az_autoclean_state_v3', JSON.stringify(appState));
-        }
-
-        function resetState() {
-            if (confirm("Réinitialiser toutes les données de l'application ?")) {
-                localStorage.removeItem('az_autoclean_state_v3');
-                appState = JSON.parse(JSON.stringify(DEFAULT_STATE));
-                renderApp();
-            }
-        }
-
-        // ==========================================
-        // 2. LOGO VECTORIEL "AZ" MINIMALISTE LUXE
-        // ==========================================
-        function getBrandLogoSVG(size = 40) {
+        // --- COMPOSANT LOGO AZ LUXURY ---
+        function renderAZLogo(size = 'normal') {
+            const sizeClass = size === 'large' ? 'w-16 h-16 text-2xl' : 'w-10 h-10 text-lg';
             return `
-                <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <linearGradient id="azGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#38bdf8"/>
-                            <stop offset="50%" stop-color="#2563eb"/>
-                            <stop offset="100%" stop-color="#1e1b4b"/>
-                        </linearGradient>
-                        <linearGradient id="waveGrad" x1="0%" y1="50%" x2="100%" y2="50%">
-                            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/>
-                            <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.2"/>
-                        </linearGradient>
-                    </defs>
-                    <rect width="100" height="100" rx="28" fill="url(#azGrad)"/>
-                    <path d="M15 70C35 85 65 85 85 70" stroke="url(#waveGrad)" stroke-width="6" stroke-linecap="round"/>
-                    <path d="M25 65L42 32H58L75 65" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M33 53H67" stroke="white" stroke-width="6" stroke-linecap="round"/>
-                    <path d="M57 32L35 68H65" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="74" cy="30" r="5" fill="#38bdf8"/>
-                </svg>
-            `;
-        }
-
-        // ==========================================
-        // 3. UTILITAIRES MODALE & NOTIFICATION
-        // ==========================================
-        function openCustomModal(htmlContent) {
-            const backdrop = document.getElementById('modal-backdrop');
-            const container = document.getElementById('modal-container');
-            container.innerHTML = htmlContent;
-            backdrop.classList.remove('hidden');
-            backdrop.classList.add('flex');
-        }
-
-        function closeModal() {
-            const backdrop = document.getElementById('modal-backdrop');
-            backdrop.classList.remove('flex');
-            backdrop.classList.add('hidden');
-        }
-
-        function showMessage(msg, title = "Information") {
-            openCustomModal(`
-                <div class="text-center space-y-4">
-                    <div class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl mx-auto flex items-center justify-center text-xl">
-                        <i class="fa-solid fa-circle-info"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-white text-base">${title}</h3>
-                        <p class="text-xs text-slate-300 mt-1">${msg}</p>
-                    </div>
-                    <button onclick="closeModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl text-xs">
-                        Compris
-                    </button>
-                </div>
-            `);
-        }
-
-        // ==========================================
-        // 4. ÉCRAN DE CONNEXION (SANS SIMULATION)
-        // ==========================================
-        function renderLoginView() {
-            const activeUsers = appState.users.filter(u => u.active);
-            const userOptions = activeUsers.map(u => {
-                const roleLabel = u.role === 'admin' ? 'Admin' : (u.role === 'cashier' ? 'Caissier' : 'Lavagiste');
-                return `<option value="${u.id}">${u.name} (${roleLabel})</option>`;
-            }).join('');
-
-            return `
-                <div class="flex-1 flex flex-col justify-center px-6 py-8">
-                    <div class="text-center mb-7">
-                        <div class="inline-flex items-center justify-center mb-3">
-                            ${getBrandLogoSVG(78)}
-                        </div>
-                        <h1 class="text-2xl font-extrabold tracking-tight text-white">
-                            AZ-<span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-500">AutoClean</span>
-                        </h1>
-                        <p class="text-xs text-slate-400 mt-1">Station Lavage, Vidange & Entretien Pro</p>
-                    </div>
-
-                    <form onsubmit="handleLogin(event)" class="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-400 mb-1.5">Sélectionner un employé</label>
-                            <select id="login-user-id" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
-                                ${userOptions}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-medium text-slate-400 mb-1.5">Code PIN d'accès</label>
-                            <input type="password" id="login-pin" maxlength="6" inputmode="numeric" placeholder="••••" required
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-center text-lg tracking-[0.5em] text-white focus:outline-none focus:border-blue-500">
-                        </div>
-
-                        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-600/30 text-sm">
-                            Se connecter
-                        </button>
-                    </form>
+                <div class="${sizeClass} rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 flex items-center justify-center font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 tracking-tighter border border-amber-300/40">
+                    AZ
                 </div>
             `;
         }
 
-        function handleLogin(event) {
-            event.preventDefault();
-            const userId = parseInt(document.getElementById('login-user-id').value);
-            const pin = document.getElementById('login-pin').value.trim();
-            const found = appState.users.find(u => u.id === userId && u.pin === pin && u.active);
-            if (!found) {
-                showMessage("Code PIN incorrect ou compte désactivé.", "Échec de connexion");
-                return;
+        // --- GESTIONNAIRE D'AFFICHAGE PRINCIPAL ---
+        function render() {
+            const appEl = document.getElementById('app');
+            if (!appState.currentUser) {
+                appEl.innerHTML = renderLoginScreen();
+            } else {
+                appEl.innerHTML = renderMainApp();
             }
-            appState.currentUser = found;
-            appState.currentView = 'home';
-            renderApp();
         }
 
-        function logoutUser() {
-            appState.currentUser = null;
-            appState.posCart = [];
-            appState.selectedVehicleId = null;
-            renderApp();
-        }
-
-        // ==========================================
-        // 5. EN-TÊTE & NAVIGATION BASSE
-        // ==========================================
-        function renderHeader() {
-            if (!appState.currentUser) return '';
-            const roleBadge = appState.currentUser.role === 'admin' ? 'Admin' : (appState.currentUser.role === 'cashier' ? 'Caissier' : 'Lavagiste');
-            
+        // --- 1. ÉCRAN DE CONNEXION ---
+        function renderLoginScreen() {
             return `
-                <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
-                    <div class="flex items-center space-x-2.5 cursor-pointer" onclick="appState.currentView='home'; renderApp();">
-                        ${getBrandLogoSVG(36)}
-                        <div>
-                            <h1 class="text-sm font-bold text-white leading-tight">AZ-AutoClean</h1>
-                            <p class="text-[10px] text-slate-400">${appState.currentUser.name} (${roleBadge})</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <button onclick="openActionMenu()" class="bg-gradient-to-r from-blue-600 to-sky-500 text-white p-2.5 rounded-xl text-xs shadow-md shadow-blue-500/20" title="Actions Rapides">
-                            <i class="fa-solid fa-bolt text-sm"></i>
-                        </button>
-                        <button onclick="logoutUser()" class="bg-slate-800 hover:bg-slate-700 text-rose-400 p-2.5 rounded-xl text-xs" title="Déconnexion">
-                            <i class="fa-solid fa-power-off text-sm"></i>
-                        </button>
-                    </div>
-                </header>
-            `;
-        }
-
-        function renderBottomNav() {
-            if (!appState.currentUser) return '';
-            const isAdmin = appState.currentUser.role === 'admin';
-            const v = appState.currentView;
-
-            return `
-                <nav class="bg-slate-900/95 backdrop-blur border-t border-slate-800 fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 px-3 py-2 flex items-center justify-around shadow-2xl">
-                    <button onclick="appState.currentView='home'; renderApp();" class="flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${v === 'home' ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-house text-lg mb-0.5"></i>
-                        <span class="text-[10px]">Accueil</span>
-                    </button>
-                    <button onclick="appState.currentView='clients'; renderApp();" class="flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${v === 'clients' ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-car-side text-lg mb-0.5"></i>
-                        <span class="text-[10px]">Plaques</span>
-                    </button>
-                    <button onclick="appState.currentView='pos'; renderApp();" class="flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${v === 'pos' ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-boxes-stacked text-lg mb-0.5"></i>
-                        <span class="text-[10px]">Produits</span>
-                    </button>
-                    <button onclick="appState.currentView='journal'; renderApp();" class="flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${v === 'journal' ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-clock-rotate-left text-lg mb-0.5"></i>
-                        <span class="text-[10px]">Journal</span>
-                    </button>
-                    ${isAdmin ? `
-                        <button onclick="appState.currentView='admin'; renderApp();" class="flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${v === 'admin' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'}">
-                            <i class="fa-solid fa-shield-halved text-lg mb-0.5"></i>
-                            <span class="text-[10px]">Admin</span>
-                        </button>
-                    ` : ''}
-                </nav>
-            `;
-        }
-
-        // ==========================================
-        // 6. MENU ACTIONS RAPIDES STATION
-        // ==========================================
-        function openActionMenu() {
-            const isCashier = appState.currentUser && appState.currentUser.role === 'cashier';
-            openCustomModal(`
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <h3 class="font-bold text-white text-base">⚡ Actions Rapides Station</h3>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2.5">
-                        <button onclick="closeModal(); openPlateScannerModal();" class="bg-slate-800 hover:bg-slate-700 text-sky-400 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 transition-all">
-                            <i class="fa-solid fa-camera text-lg"></i>
-                            <span class="text-xs font-semibold">Scanner Plaque</span>
-                        </button>
-                        <button onclick="closeModal(); openProductScannerModal();" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 transition-all">
-                            <i class="fa-solid fa-barcode text-lg"></i>
-                            <span class="text-xs font-semibold">Scanner Produit</span>
-                        </button>
-                        <button onclick="closeModal(); appState.currentView='pos'; renderApp();" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 transition-all">
-                            <i class="fa-solid fa-cash-register text-lg"></i>
-                            <span class="text-xs font-semibold">Caisse & Vente</span>
-                        </button>
-                        ${!isCashier ? `
-                            <button onclick="closeModal(); openAddClientModal();" class="bg-slate-800 hover:bg-slate-700 text-purple-400 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 transition-all">
-                                <i class="fa-solid fa-user-plus text-lg"></i>
-                                <span class="text-xs font-semibold">Nouveau Client</span>
-                            </button>
-                        ` : `
-                            <div class="bg-slate-950 border border-slate-900 p-3 rounded-2xl flex flex-col items-center justify-center text-center opacity-50">
-                                <i class="fa-solid fa-ban text-slate-500 text-lg mb-1"></i>
-                                <span class="text-[10px] text-slate-400">Création client restreinte</span>
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `);
-        }
-
-        // ==========================================
-        // 7. ÉCRAN D'ACCUEIL
-        // ==========================================
-        function renderHomeView() {
-            const totalPassagesToday = appState.passages.length;
-            const caTotal = appState.passages.reduce((sum, p) => sum + p.totalAmount, 0);
-            const isCashier = appState.currentUser && appState.currentUser.role === 'cashier';
-
-            return `
-                <div class="p-4 space-y-5 pb-24">
-                    <!-- Carte Résumé Station -->
-                    <div class="bg-gradient-to-br from-blue-900/40 via-slate-900 to-slate-900 border border-blue-500/20 rounded-3xl p-5 shadow-xl relative overflow-hidden">
-                        <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <p class="text-xs font-medium text-blue-300">Chiffre d'Affaires Global</p>
-                                <h2 class="text-2xl font-black text-white mt-0.5">${caTotal.toLocaleString()} <span class="text-sm font-semibold text-sky-400">DA</span></h2>
-                            </div>
-                            <div class="bg-blue-600/20 border border-blue-500/30 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-300">
-                                ${totalPassagesToday} Interventions
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
-                            <button onclick="openPlateScannerModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all shadow-md shadow-blue-600/20">
-                                <i class="fa-solid fa-camera"></i>
-                                <span>Scanner Plaque</span>
-                            </button>
-                            <button onclick="openProductScannerModal()" class="bg-slate-800 hover:bg-slate-700 text-sky-300 font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all">
-                                <i class="fa-solid fa-barcode"></i>
-                                <span>Scan Produit</span>
-                            </button>
-                        </div>
+                <div class="flex-1 flex flex-col justify-between p-6 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950">
+                    <div class="pt-12 text-center flex flex-col items-center">
+                        <div class="mb-4 animate-bounce">${renderAZLogo('large')}</div>
+                        <h1 class="text-3xl font-extrabold text-white tracking-tight">AZ-AutoClean</h1>
+                        <p class="text-xs text-amber-400 font-medium tracking-widest uppercase mt-1">Car Wash & Maintenance Management</p>
                     </div>
 
-                    <!-- Véhicules nécessitant une vidange (Alertes) -->
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center">
-                                <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Alertes Vidanges & Entretiens
-                            </h3>
-                            <button onclick="appState.currentView='clients'; renderApp();" class="text-xs text-sky-400 font-semibold hover:underline">Voir tout</button>
-                        </div>
-                        <div class="space-y-2.5">
-                            ${appState.vehicles.map(v => {
-                                const diff = v.nextOilMileage - v.mileage;
-                                const isUrgent = diff <= 1000;
-                                return `
-                                    <div class="bg-slate-900 border ${isUrgent ? 'border-amber-500/40' : 'border-slate-800'} rounded-2xl p-3.5 flex items-center justify-between">
-                                        <div class="pr-2">
-                                            <div class="flex items-center space-x-2">
-                                                <span class="font-mono bg-slate-950 text-sky-400 font-bold text-xs px-2 py-0.5 rounded border border-slate-800">${v.plate}</span>
-                                                <span class="text-xs font-semibold text-white">${v.brandModel}</span>
-                                            </div>
-                                            <p class="text-[11px] text-slate-400 mt-1">Propriétaire : ${v.owner} • ${v.mileage.toLocaleString()} km</p>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="text-[11px] font-bold px-2.5 py-1 rounded-xl ${isUrgent ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-300'}">
-                                                Reste ${diff.toLocaleString()} km
-                                            </span>
+                    <div class="space-y-4 my-auto">
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-md">
+                            <h2 class="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-lock text-amber-400"></i> Sélectionner un profil d'accès
+                            </h2>
+                            <div class="space-y-3">
+                                <button onclick="loginAs('admin')" class="w-full text-left p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center justify-between group">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">A</div>
+                                        <div>
+                                            <div class="font-bold text-slate-100 group-hover:text-amber-400 transition-colors">Administrateur</div>
+                                            <div class="text-xs text-slate-400">Accès complet & Gestion parc</div>
                                         </div>
                                     </div>
-                                `;
-                            }).join('')}
+                                    <i class="fa-solid fa-chevron-right text-slate-500 group-hover:text-amber-400"></i>
+                                </button>
+                                <button onclick="loginAs('cashier')" class="w-full text-left p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center justify-between group">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">C</div>
+                                        <div>
+                                            <div class="font-bold text-slate-100 group-hover:text-blue-400 transition-colors">Caissier / Vente</div>
+                                            <div class="text-xs text-slate-400">Scan & Encaissement (Restrictions client)</div>
+                                        </div>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-right text-slate-500 group-hover:text-blue-400"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Actions Rapides Accueil -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="appState.currentView='pos'; renderApp();" class="bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl text-left space-y-2 transition-all">
-                            <div class="w-9 h-9 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center text-sm">
-                                <i class="fa-solid fa-cash-register"></i>
-                            </div>
-                            <h4 class="font-bold text-xs text-white">Encaissement & POS</h4>
-                            <p class="text-[10px] text-slate-400">Vente de produits & services de lavage</p>
-                        </button>
-                        ${!isCashier ? `
-                            <button onclick="openAddClientModal()" class="bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl text-left space-y-2 transition-all">
-                                <div class="w-9 h-9 bg-purple-500/10 text-purple-400 rounded-xl flex items-center justify-center text-sm">
-                                    <i class="fa-solid fa-user-plus"></i>
-                                </div>
-                                <h4 class="font-bold text-xs text-white">Nouveau Client</h4>
-                                <p class="text-[10px] text-slate-400">Enregistrer un véhicule & propriétaire</p>
-                            </button>
-                        ` : `
-                            <div class="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl text-left space-y-2 opacity-60">
-                                <div class="w-9 h-9 bg-slate-800 text-slate-500 rounded-xl flex items-center justify-center text-sm">
-                                    <i class="fa-solid fa-ban"></i>
-                                </div>
-                                <h4 class="font-bold text-xs text-slate-400">Ajout Restreint</h4>
-                                <p class="text-[10px] text-slate-500">Droits caissier limités</p>
-                            </div>
-                        `}
+                    <div class="text-center text-xs text-slate-500 pb-4">
+                        AZ-AutoClean v2.6 • Sécurisé PWA
                     </div>
                 </div>
             `;
         }
 
-        // ==========================================
-        // 8. MODULE CAMÉRA : SCANNER PLAQUE (LIVE)
-        // ==========================================
-        function openPlateScannerModal() {
-            openCustomModal(`
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <h3 class="font-bold text-white text-sm flex items-center">
-                            <i class="fa-solid fa-camera mr-2 text-sky-400"></i> Scanner Plaque d'Immatriculation
-                        </h3>
-                        <button onclick="closeCameraAndModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-
-                    <div class="relative w-full h-56 bg-black rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
-                        <video id="plate-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
-                        <canvas id="plate-canvas" class="hidden"></canvas>
-                        <div class="absolute inset-0 border-2 border-dashed border-sky-400/60 m-6 rounded-xl flex items-center justify-center pointer-events-none">
-                            <div class="absolute inset-0 bg-sky-400/10 animate-pulse"></div>
-                            <span class="bg-slate-950/80 text-sky-300 px-3 py-1 rounded-lg text-xs font-mono font-bold z-10">Cadrer la plaque ici</span>
-                        </div>
-                    </div>
-
-                    <div class="space-y-2.5">
-                        <button onclick="triggerAutoPlateCapture()" class="w-full bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-blue-600/20">
-                            Capturer & Reconnaître la Plaque
-                        </button>
-                        <p class="text-[11px] text-slate-400 text-center">Ou sélectionner directement :</p>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="stopCameraStream(); simulatePlateRecognized('01234-116-16')" class="bg-slate-800 hover:bg-slate-700 text-sky-300 font-semibold py-2.5 rounded-xl text-xs font-mono">
-                                01234-116-16
-                            </button>
-                            <button onclick="stopCameraStream(); simulatePlateRecognized('09876-119-31')" class="bg-slate-800 hover:bg-slate-700 text-sky-300 font-semibold py-2.5 rounded-xl text-xs font-mono">
-                                09876-119-31
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `);
-            initCameraStream('plate-video');
-        }
-
-        function triggerAutoPlateCapture() {
-            const video = document.getElementById('plate-video');
-            const canvas = document.getElementById('plate-canvas');
-            if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // Simulation d'analyse optique instantanée réussie basée sur le flux actif
-                stopCameraStream();
-                const randomVehicle = appState.vehicles[Math.floor(Math.random() * appState.vehicles.length)];
-                simulatePlateRecognized(randomVehicle.plate);
+        function loginAs(role) {
+            if (role === 'admin') {
+                appState.currentUser = { name: 'Karim Benali', role: 'admin' };
             } else {
-                simulatePlateRecognized('01234-116-16');
+                appState.currentUser = { name: 'Sofiane Hadj', role: 'cashier' };
             }
+            render();
         }
 
-        // ==========================================
-        // 9. MODULE CAMÉRA : SCANNER PRODUIT (LIVE)
-        // ==========================================
-        function openProductScannerModal() {
-            openCustomModal(`
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <h3 class="font-bold text-white text-sm flex items-center">
-                            <i class="fa-solid fa-barcode mr-2 text-emerald-400"></i> Scanner Code-Barres / QR Produit
-                        </h3>
-                        <button onclick="closeCameraAndModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-
-                    <div class="relative w-full h-56 bg-black rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
-                        <video id="product-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
-                        <canvas id="product-canvas" class="hidden"></canvas>
-                        <div class="absolute inset-0 border-2 border-dashed border-emerald-400/60 m-6 rounded-xl flex items-center justify-center pointer-events-none">
-                            <div class="absolute inset-0 bg-emerald-400/10 animate-pulse"></div>
-                            <span class="bg-slate-950/80 text-emerald-300 px-3 py-1 rounded-lg text-xs font-mono font-bold z-10">Cadrer le code-barres</span>
-                        </div>
-                    </div>
-
-                    <div class="space-y-2.5">
-                        <button onclick="triggerAutoProductCapture()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-emerald-600/20">
-                            Scanner & Ajouter au Panier
-                        </button>
-                        <p class="text-[11px] text-slate-400 text-center">Ou sélectionner un article :</p>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="stopCameraStream(); simulateProductScanned('34259010')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 font-semibold py-2.5 rounded-xl text-xs">
-                                Huile 5W40
-                            </button>
-                            <button onclick="stopCameraStream(); simulateProductScanned('32859301')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 font-semibold py-2.5 rounded-xl text-xs">
-                                Filtre à Huile
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `);
-            initCameraStream('product-video');
+        function logout() {
+            appState.currentUser = null;
+            render();
         }
 
-        function triggerAutoProductCapture() {
-            const video = document.getElementById('product-video');
-            const canvas = document.getElementById('product-canvas');
-            if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                stopCameraStream();
-                const randomProduct = appState.catalog.filter(c => c.type === 'product')[0];
-                simulateProductScanned(randomProduct ? randomProduct.barcode : '34259010');
-            } else {
-                simulateProductScanned('34259010');
-            }
-        }
-
-        let activeStream = null;
-
-        function initCameraStream(videoId) {
-            const videoElement = document.getElementById(videoId);
-            if (!videoElement) return;
-
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                    .then(stream => {
-                        activeStream = stream;
-                        videoElement.srcObject = stream;
-                    })
-                    .catch(err => {
-                        console.warn("Caméra non accessible ou refusée :", err);
-                        const parent = videoElement.parentElement;
-                        if (parent) {
-                            parent.innerHTML = `
-                                <div class="flex flex-col items-center justify-center h-full text-center p-4">
-                                    <i class="fa-solid fa-camera-slash text-2xl text-slate-500 mb-2"></i>
-                                    <p class="text-xs text-slate-400">Caméra non disponible (Autorisation requise).</p>
-                                    <p class="text-[10px] text-slate-500 mt-1">Utilisez les boutons de sélection rapide ci-dessous.</p>
-                                </div>
-                            `;
-                        }
-                    });
-            }
-        }
-
-        function stopCameraStream() {
-            if (activeStream) {
-                activeStream.getTracks().forEach(track => track.stop());
-                activeStream = null;
-            }
-        }
-
-        function closeCameraAndModal() {
-            stopCameraStream();
-            closeModal();
-        }
-
-        function simulatePlateRecognized(plate) {
-            closeModal();
-            const vehicle = appState.vehicles.find(v => v.plate === plate);
-            if (vehicle) {
-                appState.selectedVehicleId = vehicle.id;
-                appState.currentView = 'clients';
-                renderApp();
-                showMessage(`Véhicule ${vehicle.brandModel} (${vehicle.plate}) reconnu avec succès !`, "Plaque Identifiée");
-            } else {
-                showMessage(`Plaque ${plate} non trouvée dans la base.`, "Reconnaissance Plaque");
-            }
-        }
-
-        function simulateProductScanned(barcode) {
-            closeModal();
-            const product = appState.catalog.find(p => p.barcode === barcode);
-            if (product) {
-                const existing = appState.posCart.find(i => i.id === product.id);
-                if (existing) {
-                    existing.qty += 1;
-                } else {
-                    appState.posCart.push({ ...product, qty: 1 });
-                }
-                appState.currentView = 'pos';
-                renderApp();
-                showMessage(`Article "${product.name}" ajouté au panier !`, "Scan Réussi");
-            } else {
-                showMessage(`Code-barres ${barcode} inconnu.`, "Scan Produit");
-            }
-        }
-
-        // ==========================================
-        // 10. MODULE PLAQUES & VÉHICULES (ONGLET PLAQUES)
-        // ==========================================
-        function renderClientsView() {
-            const isCashier = appState.currentUser && appState.currentUser.role === 'cashier';
-            
+        // --- 2. INTERFACE PRINCIPALE ---
+        function renderMainApp() {
             return `
-                <div class="p-4 space-y-4 pb-24">
+                <div class="flex-1 flex flex-col h-full overflow-hidden">
+                    <!-- HEADER -->
+                    <header class="px-5 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between backdrop-blur-md sticky top-0 z-20">
+                        <div class="flex items-center gap-3">
+                            ${renderAZLogo()}
+                            <div>
+                                <h1 class="text-base font-bold text-white leading-tight">AZ-AutoClean</h1>
+                                <span class="text-xs px-2 py-0.5 rounded-full ${appState.currentUser.role === 'admin' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}">
+                                    ${appState.currentUser.role === 'admin' ? 'Admin: ' + appState.currentUser.name : 'Caissier: ' + appState.currentUser.name}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openScanner('plate')" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 flex items-center justify-center border border-slate-700 transition" title="Scanner Plaque">
+                                <i class="fa-solid fa-camera"></i>
+                            </button>
+                            <button onclick="logout()" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-red-900/40 text-slate-400 hover:text-red-400 flex items-center justify-center border border-slate-700 transition" title="Déconnexion">
+                                <i class="fa-solid fa-power-off"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    <!-- CONTENU ONGLET ACTIF -->
+                    <main class="flex-1 overflow-y-auto p-4 pb-24 hide-scrollbar">
+                        ${appState.currentTab === 'plates' ? renderPlatesTab() : renderProductsTab()}
+                    </main>
+
+                    <!-- NAVIGATION DU BAS -->
+                    <nav class="absolute bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800 px-6 py-3 flex items-center justify-around backdrop-blur-md z-20">
+                        <button onclick="switchTab('plates')" class="flex flex-col items-center gap-1 transition-all ${appState.currentTab === 'plates' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'}">
+                            <i class="fa-solid fa-car-side text-lg"></i>
+                            <span class="text-xs font-semibold">Plaques & Véhicules</span>
+                        </button>
+                        <button onclick="switchTab('products')" class="flex flex-col items-center gap-1 transition-all ${appState.currentTab === 'products' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'}">
+                            <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                            <span class="text-xs font-semibold">Produits & Scan</span>
+                        </button>
+                    </nav>
+
+                    <!-- MODAL DE SCANNER CAMÉRA -->
+                    <div id="scannerModal" class="hidden fixed inset-0 z-50 bg-slate-950/95 flex flex-col p-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 id="scannerTitle" class="text-lg font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-camera text-amber-400"></i> Scanner Caméra
+                            </h3>
+                            <button onclick="closeScanner()" class="w-10 h-10 rounded-xl bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center">
+                                <i class="fa-solid fa-xmark text-lg"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 relative rounded-2xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center">
+                            <video id="scannerVideo" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
+                            <canvas id="scannerCanvas" class="hidden"></canvas>
+                            <!-- Viseur visuel -->
+                            <div class="absolute inset-12 border-2 border-amber-400/80 rounded-2xl pointer-events-none flex items-center justify-center">
+                                <div class="w-full h-0.5 bg-red-500/60 animate-pulse"></div>
+                            </div>
+                            <div class="absolute bottom-6 left-0 right-0 text-center px-4">
+                                <p id="scannerInstruction" class="text-xs bg-slate-900/80 text-amber-300 py-2 px-4 rounded-xl border border-slate-700/80 backdrop-blur-md inline-block">
+                                    Alignez l'élément dans le cadre
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-3">
+                            <button onclick="triggerManualCapture()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg transition">
+                                <i class="fa-solid fa-camera-rotate mr-2"></i> Capturer / Valider
+                            </button>
+                            <button onclick="closeScanner()" class="px-5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition">
+                                Annuler
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function switchTab(tab) {
+            appState.currentTab = tab;
+            render();
+        }
+
+        // --- ONGLET 1 : PLAQUES & VÉHICULES ---
+        function renderPlatesTab() {
+            return `
+                <div class="space-y-5">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h2 class="text-base font-bold text-white">Parc Véhicules & Plaques</h2>
-                            <p class="text-xs text-slate-400">Suivi kilométrage et alertes vidange</p>
+                            <h2 class="text-lg font-bold text-white">Parc & Plaques</h2>
+                            <p class="text-xs text-slate-400">Suivi des véhicules et kilométrage vidange</p>
                         </div>
-                        <div class="flex space-x-2">
-                            <button onclick="openPlateScannerModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-3 py-2 rounded-xl flex items-center">
-                                <i class="fa-solid fa-camera mr-1.5"></i> Scanner
+                        ${appState.currentUser.role === 'admin' ? `
+                            <button onclick="openAddVehicleModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-plus"></i> Nouveau Véhicule
                             </button>
-                            ${!isCashier ? `
-                                <button onclick="openAddClientModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center">
-                                    <i class="fa-solid fa-plus mr-1"></i> Client
-                                </button>
-                            ` : ''}
-                        </div>
+                        ` : ''}
                     </div>
 
                     <!-- Barre de recherche plaques -->
                     <div class="relative">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-500 text-xs"></i>
-                        <input type="text" id="plate-search-input" oninput="filterVehicleList(this.value)" placeholder="Rechercher par immatriculation, marque ou propriétaire..."
-                            class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3.5 py-3 text-xs text-white focus:outline-none focus:border-blue-500">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-500"></i>
+                        <input type="text" id="plateSearchInput" oninput="filterPlates(this.value)" placeholder="Rechercher par plaque, propriétaire..." class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500">
                     </div>
 
-                    <!-- Liste des Véhicules -->
-                    <div id="vehicle-list-container" class="space-y-3">
-                        ${renderVehicleCards(appState.vehicles)}
-                    </div>
-                </div>
-            `;
-        }
-
-        function filterVehicleList(query) {
-            const q = query.toLowerCase();
-            const filtered = appState.vehicles.filter(v => 
-                v.plate.toLowerCase().includes(q) || 
-                v.brandModel.toLowerCase().includes(q) || 
-                v.owner.toLowerCase().includes(q)
-            );
-            const container = document.getElementById('vehicle-list-container');
-            if (container) {
-                container.innerHTML = renderVehicleCards(filtered);
-            }
-        }
-
-        function renderVehicleCards(vehicles) {
-            if (vehicles.length === 0) {
-                return `<div class="text-center py-8 text-slate-500 text-xs">Aucun véhicule trouvé.</div>`;
-            }
-
-            return vehicles.map(v => {
-                const diff = v.nextOilMileage - v.mileage;
-                const isUrgent = diff <= 1000;
-                const isSelected = appState.selectedVehicleId === v.id;
-
-                return `
-                    <div class="bg-slate-900 border ${isSelected ? 'border-blue-500' : 'border-slate-800'} rounded-2xl p-4 space-y-3 transition-all">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2.5">
-                                <span class="font-mono bg-slate-950 text-sky-400 font-bold text-xs px-2.5 py-1 rounded-lg border border-slate-800">${v.plate}</span>
-                                <span class="font-bold text-sm text-white">${v.brandModel}</span>
-                            </div>
-                            <span class="text-[11px] px-2.5 py-1 rounded-xl font-bold ${isUrgent ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}">
-                                ${diff <= 0 ? 'Vidange urgente' : `Reste ${diff.toLocaleString()} km`}
-                            </span>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2 text-xs bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                            <div>
-                                <span class="text-slate-400 text-[10px] block">Propriétaire</span>
-                                <span class="font-semibold text-slate-200">${v.owner}</span>
-                            </div>
-                            <div>
-                                <span class="text-slate-400 text-[10px] block">Téléphone</span>
-                                <span class="font-semibold text-slate-200">${v.phone}</span>
-                            </div>
-                            <div class="pt-1">
-                                <span class="text-slate-400 text-[10px] block">Kilométrage actuel</span>
-                                <span class="font-mono font-bold text-sky-300">${v.mileage.toLocaleString()} km</span>
-                            </div>
-                            <div class="pt-1">
-                                <span class="text-slate-400 text-[10px] block">Prochaine Vidange</span>
-                                <span class="font-mono font-bold text-amber-300">${v.nextOilMileage.toLocaleString()} km</span>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-end space-x-2 pt-1">
-                            <button onclick="openEditVehicleModal(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-sky-300 px-3 py-1.5 rounded-xl text-xs font-semibold">
-                                <i class="fa-solid fa-pen-to-square mr-1"></i> Modifier km
-                            </button>
-                            <button onclick="selectVehicleForPos(${v.id})" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold">
-                                <i class="fa-solid fa-cash-register mr-1"></i> Encaisser
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function openAddClientModal() {
-            if (appState.currentUser && appState.currentUser.role === 'cashier') {
-                showMessage("Le rôle Caissier n'a pas l'autorisation d'enregistrer de nouveaux clients.", "Action Interdite");
-                return;
-            }
-
-            openCustomModal(`
-                <form onsubmit="saveNewClient(event)" class="space-y-3.5">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <h3 class="font-bold text-white text-base">Enregistrer un Véhicule</h3>
-                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Plaque d'immatriculation</label>
-                        <input type="text" id="new-v-plate" required placeholder="01234-116-16" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono uppercase">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Marque & Modèle</label>
-                        <input type="text" id="new-v-model" required placeholder="Renault Clio 5" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Nom du Propriétaire</label>
-                        <input type="text" id="new-v-owner" required placeholder="Mohamed Belkacem" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Téléphone</label>
-                        <input type="tel" id="new-v-phone" required placeholder="0550123456" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="text-xs text-slate-400 block mb-1">Kilométrage actuel</label>
-                            <input type="number" id="new-v-mileage" required placeholder="50000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                        </div>
-                        <div>
-                            <label class="text-xs text-slate-400 block mb-1">Prochaine Vidange (km)</label>
-                            <input type="number" id="new-v-next-oil" required placeholder="60000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                        </div>
-                    </div>
-                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-purple-600/20">
-                        Enregistrer le véhicule
-                    </button>
-                </form>
-            `);
-        }
-
-        function saveNewClient(e) {
-            e.preventDefault();
-            const plate = document.getElementById('new-v-plate').value.trim();
-            const brandModel = document.getElementById('new-v-model').value.trim();
-            const owner = document.getElementById('new-v-owner').value.trim();
-            const phone = document.getElementById('new-v-phone').value.trim();
-            const mileage = parseInt(document.getElementById('new-v-mileage').value) || 0;
-            const nextOilMileage = parseInt(document.getElementById('new-v-next-oil').value) || (mileage + 10000);
-
-            appState.vehicles.unshift({
-                id: Date.now(),
-                plate, brandModel, owner, phone, mileage, nextOilMileage,
-                lastService: new Date().toLocaleDateString('fr-FR')
-            });
-
-            saveState();
-            closeModal();
-            renderApp();
-            showMessage("Nouveau véhicule enregistré avec succès !", "Succès");
-        }
-
-        function openEditVehicleModal(vehicleId) {
-            const v = appState.vehicles.find(item => item.id === vehicleId);
-            if (!v) return;
-
-            openCustomModal(`
-                <form onsubmit="saveUpdatedVehicle(event, ${v.id})" class="space-y-3.5">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <div>
-                            <h3 class="font-bold text-white text-sm">Mise à jour Kilométrage</h3>
-                            <p class="text-[11px] text-sky-400 font-mono">${v.plate} - ${v.brandModel}</p>
-                        </div>
-                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Nouveau Kilométrage Actuel (km)</label>
-                        <input type="number" id="edit-v-mileage" value="${v.mileage}" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Prochaine Vidange (km)</label>
-                        <input type="number" id="edit-v-next" value="${v.nextOilMileage}" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl text-xs">
-                        Enregistrer les modifications
-                    </button>
-                </form>
-            `);
-        }
-
-        function saveUpdatedVehicle(e, vehicleId) {
-            e.preventDefault();
-            const v = appState.vehicles.find(item => item.id === vehicleId);
-            if (v) {
-                v.mileage = parseInt(document.getElementById('edit-v-mileage').value) || v.mileage;
-                v.nextOilMileage = parseInt(document.getElementById('edit-v-next').value) || v.nextOilMileage;
-                v.lastService = new Date().toLocaleDateString('fr-FR');
-                saveState();
-            }
-            closeModal();
-            renderApp();
-            showMessage("Kilométrage mis à jour avec succès !", "Mise à jour");
-        }
-
-        function selectVehicleForPos(vehicleId) {
-            appState.selectedVehicleId = vehicleId;
-            appState.currentView = 'pos';
-            renderApp();
-        }
-
-        // ==========================================
-        // 11. MODULE PRODUITS & POS CAISSE (ONGLET PRODUITS)
-        // ==========================================
-        function renderPosView() {
-            const selectedVehicle = appState.vehicles.find(v => v.id === appState.selectedVehicleId);
-            const cartTotal = appState.posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-
-            return `
-                <div class="p-4 space-y-4 pb-28">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-base font-bold text-white">Catalogue & Caisse</h2>
-                            <p class="text-xs text-slate-400">Gestion des stocks et encaissement</p>
-                        </div>
-                        <button onclick="openProductScannerModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3 py-2 rounded-xl flex items-center shadow-md shadow-emerald-600/20">
-                            <i class="fa-solid fa-barcode mr-1.5"></i> Scanner
-                        </button>
-                    </div>
-
-                    <!-- Client/Véhicule Associé à la Vente -->
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between">
-                        <div>
-                            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Véhicule Associé</span>
-                            <span class="text-xs font-bold text-sky-400">${selectedVehicle ? `${selectedVehicle.brandModel} (${selectedVehicle.plate})` : 'Aucun véhicule sélectionné'}</span>
-                        </div>
-                        <button onclick="openSelectVehicleModal()" class="text-xs text-sky-400 font-semibold bg-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-700">
-                            ${selectedVehicle ? 'Changer' : 'Sélectionner'}
-                        </button>
-                    </div>
-
-                    <!-- Catalogue Articles & Services -->
-                    <div class="space-y-2.5">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-sky-400">Services & Produits disponibles</h3>
-                        <div class="grid grid-cols-1 gap-2">
-                            ${appState.catalog.map(item => `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between">
-                                    <div class="pr-2">
-                                        <div class="flex items-center space-x-2">
-                                            <span class="font-bold text-xs text-white">${item.name}</span>
-                                            <span class="text-[10px] px-2 py-0.5 rounded ${item.type === 'service' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'} uppercase">${item.type}</span>
-                                        </div>
-                                        <p class="text-xs font-semibold text-sky-300 mt-1">${item.price.toLocaleString()} DA ${item.type === 'product' ? `• Stock: ${item.stock}` : ''}</p>
-                                    </div>
-                                    <button onclick="addToCart(${item.id})" class="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-xl text-xs flex items-center justify-center shadow-md shadow-blue-600/20">
-                                        <i class="fa-solid fa-plus"></i>
-                                    </button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- Panier Actif -->
-                    ${appState.posCart.length > 0 ? `
-                        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Panier en cours</h3>
-                            <div class="space-y-2 max-h-48 overflow-y-auto">
-                                ${appState.posCart.map(ci => `
-                                    <div class="flex items-center justify-between text-xs bg-slate-950 p-2 rounded-xl border border-slate-800/80">
-                                        <span class="text-white font-medium pr-2">${ci.name}</span>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-sky-300 font-bold">${(ci.price * ci.qty).toLocaleString()} DA</span>
-                                            <div class="flex items-center space-x-1 bg-slate-900 px-2 py-1 rounded-lg">
-                                                <button onclick="updateCartQty(${ci.id}, -1)" class="text-slate-400 hover:text-white px-1">-</button>
-                                                <span class="font-bold text-white">${ci.qty}</span>
-                                                <button onclick="updateCartQty(${ci.id}, 1)" class="text-slate-400 hover:text-white px-1">+</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
-                                <span class="font-bold text-xs text-white">Total à encaisser :</span>
-                                <span class="font-black text-emerald-400 text-base">${cartTotal.toLocaleString()} DA</span>
-                            </div>
-                            <button onclick="checkoutCart()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-emerald-600/20">
-                                Valider & Encaisser
-                            </button>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        function addToCart(itemId) {
-            const item = appState.catalog.find(c => c.id === itemId);
-            if (!item) return;
-
-            if (item.type === 'product' && item.stock <= 0) {
-                showMessage(`Stock épuisé pour ${item.name}.`, "Stock Insuffisant");
-                return;
-            }
-
-            const existing = appState.posCart.find(i => i.id === itemId);
-            if (existing) {
-                if (item.type === 'product' && existing.qty >= item.stock) {
-                    showMessage("Stock maximum atteint pour cet article.", "Stock Limité");
-                    return;
-                }
-                existing.qty += 1;
-            } else {
-                appState.posCart.push({ ...item, qty: 1 });
-            }
-            renderApp();
-        }
-
-        function updateCartQty(itemId, delta) {
-            const index = appState.posCart.findIndex(i => i.id === itemId);
-            if (index !== -1) {
-                appState.posCart[index].qty += delta;
-                if (appState.posCart[index].qty <= 0) {
-                    appState.posCart.splice(index, 1);
-                }
-                renderApp();
-            }
-        }
-
-        function openSelectVehicleModal() {
-            openCustomModal(`
-                <div class="space-y-3.5">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <h3 class="font-bold text-white text-sm">Sélectionner un Véhicule</h3>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <div class="space-y-2 max-h-72 overflow-y-auto">
+                    <!-- Liste des véhicules -->
+                    <div id="vehiclesList" class="space-y-3">
                         ${appState.vehicles.map(v => `
-                            <div onclick="appState.selectedVehicleId = ${v.id}; closeModal(); renderApp();" class="bg-slate-950 border border-slate-800 hover:border-blue-500 p-3 rounded-xl cursor-pointer transition-all flex items-center justify-between">
-                                <div>
-                                    <span class="font-mono text-sky-400 font-bold text-xs">${v.plate}</span>
-                                    <p class="text-xs font-semibold text-white">${v.brandModel} (${v.owner})</p>
+                            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
+                                <div class="flex items-start justify-between mb-3">
+                                    <div>
+                                        <span class="text-xs px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 font-mono font-bold border border-amber-500/20">${v.plate}</span>
+                                        <h3 class="text-sm font-bold text-white mt-2">${v.brand}</h3>
+                                        <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1 text-slate-500"></i> ${v.owner}</p>
+                                    </div>
+                                    <span class="text-xs px-2.5 py-1 rounded-full ${v.status === 'Actif' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}">
+                                        ${v.status}
+                                    </span>
                                 </div>
-                                <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                                <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-xs">
+                                    <div>
+                                        <span class="text-slate-500 block">Kilométrage actuel</span>
+                                        <span class="font-bold text-slate-200">${v.km.toLocaleString()} km</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-500 block">Prochaine Vidange</span>
+                                        <span class="font-bold text-amber-400">${v.nextVidange.toLocaleString()} km</span>
+                                    </div>
+                                </div>
+                                ${appState.currentUser.role === 'admin' ? `
+                                    <div class="mt-3 pt-3 border-t border-slate-800/80 flex justify-end gap-2">
+                                        <button onclick="editVehicleKm(${v.id})" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition">
+                                            <i class="fa-solid fa-gauge mr-1 text-amber-400"></i> Màj KM
+                                        </button>
+                                        <button onclick="deleteVehicle(${v.id})" class="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded-lg transition">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </div>
+                                ` : ''}
                             </div>
                         `).join('')}
                     </div>
                 </div>
-            `);
-        }
-
-        function checkoutCart() {
-            if (appState.posCart.length === 0) return;
-
-            const vehicle = appState.vehicles.find(v => v.id === appState.selectedVehicleId);
-            const clientName = vehicle ? vehicle.owner : 'Client de Passage';
-            const plate = vehicle ? vehicle.plate : 'SANS-IMMAT';
-            const totalAmount = appState.posCart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-            const itemsSummary = appState.posCart.map(i => `${i.name} (x${i.qty})`);
-
-            // Décrémenter les stocks produits
-            appState.posCart.forEach(cartItem => {
-                const catItem = appState.catalog.find(c => c.id === cartItem.id);
-                if (catItem && catItem.type === 'product') {
-                    catItem.stock = Math.max(0, catItem.stock - cartItem.qty);
-                }
-            });
-
-            // Enregistrer dans le journal
-            appState.passages.unshift({
-                id: Date.now(),
-                clientName,
-                plate,
-                employeeName: appState.currentUser.name,
-                items: itemsSummary,
-                totalAmount,
-                date: new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
-            });
-
-            appState.posCart = [];
-            appState.selectedVehicleId = null;
-            saveState();
-            renderApp();
-            showMessage(`Paiement de ${totalAmount.toLocaleString()} DA validé avec succès !`, "Encaissement Réussi");
-        }
-
-        // ==========================================
-        // 12. JOURNAL & ACTIVITÉ (ONGLET JOURNAL)
-        // ==========================================
-        function renderJournalView() {
-            return `
-                <div class="p-4 space-y-4 pb-24">
-                    <div>
-                        <h2 class="text-base font-bold text-white">Journal d'Activité & Passages</h2>
-                        <p class="text-xs text-slate-400">Historique des prestations par employé et client</p>
-                    </div>
-
-                    <div class="space-y-2.5">
-                        ${appState.passages.length === 0 ? `<p class="text-xs text-slate-500 text-center py-8">Aucun passage enregistré.</p>` : 
-                            appState.passages.map(p => `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center space-x-2">
-                                            <span class="font-mono bg-slate-950 text-sky-400 font-bold text-xs px-2 py-0.5 rounded border border-slate-800">${p.plate}</span>
-                                            <span class="font-bold text-xs text-white">${p.clientName}</span>
-                                        </div>
-                                        <span class="font-black text-emerald-400 text-xs">${p.totalAmount.toLocaleString()} DA</span>
-                                    </div>
-                                    <div class="text-[11px] text-slate-300 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 space-y-0.5">
-                                        <p class="font-medium text-slate-200">Prestations : ${p.items.join(', ')}</p>
-                                        <div class="flex justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-800/50">
-                                            <span>Employé : <strong class="text-amber-300">${p.employeeName}</strong></span>
-                                            <span>${p.date}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')
-                        }
-                    </div>
-                </div>
             `;
         }
 
-        // ==========================================
-        // 13. ESPACE ADMINISTRATEUR
-        // ==========================================
-        function renderAdminView() {
-            if (!appState.currentUser || appState.currentUser.role !== 'admin') {
-                return `<div class="p-6 text-center text-rose-400 text-sm">Accès réservé à l'administrateur.</div>`;
-            }
-
+        // --- ONGLET 2 : PRODUITS & SCAN ---
+        function renderProductsTab() {
             return `
-                <div class="p-4 space-y-5 pb-24">
+                <div class="space-y-5">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h2 class="text-base font-bold text-white">Espace Administrateur</h2>
-                            <p class="text-xs text-slate-400">Équipe, accès PIN, historique & tarifs</p>
+                            <h2 class="text-lg font-bold text-white">Inventaire & Produits</h2>
+                            <p class="text-xs text-slate-400">Gestion des stocks et scan code-barres</p>
                         </div>
-                        <button onclick="openAddUserModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl flex items-center">
-                            <i class="fa-solid fa-user-plus mr-1.5"></i> Employé
+                        <button onclick="openScanner('product')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-barcode"></i> Scanner Produit
                         </button>
                     </div>
 
-                    <!-- Gestion des Employés & Suivi d'activité -->
+                    <!-- Liste des produits -->
                     <div class="space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Équipe & Suivi d'activité</h3>
-                        ${appState.users.map(u => {
-                            const empPassages = appState.passages.filter(p => p.employeeName === u.name);
-                            const empTotal = empPassages.reduce((s, p) => s + p.totalAmount, 0);
-                            const roleBadge = u.role === 'admin' ? 'Admin' : (u.role === 'cashier' ? 'Caissier' : 'Lavagiste');
-                            return `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <div class="flex items-center space-x-2">
-                                                <span class="font-bold text-sm text-white">${u.name}</span>
-                                                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 uppercase">${roleBadge}</span>
-                                            </div>
-                                            <p class="text-[11px] text-slate-400 mt-0.5">PIN : <span class="font-mono text-amber-300">${u.pin}</span> • CA généré : <strong class="text-emerald-400">${empTotal.toLocaleString()} DA</strong></p>
-                                        </div>
-                                        <div class="flex space-x-1.5">
-                                            <button onclick="openChangePinModal(${u.id})" title="Modifier PIN" class="bg-slate-800 hover:bg-slate-700 text-amber-300 px-2.5 py-1.5 rounded-xl text-xs">
-                                                <i class="fa-solid fa-key"></i>
-                                            </button>
-                                            <button onclick="openEmployeeHistoryModal('${u.name}')" title="Historique travail" class="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 px-2.5 py-1.5 rounded-xl text-xs font-semibold">
-                                                Détails (${empPassages.length})
-                                            </button>
-                                        </div>
+                        ${appState.products.map(p => `
+                            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-mono">${p.id}</span>
+                                        <span class="text-xs text-slate-400">${p.category}</span>
                                     </div>
+                                    <h3 class="text-sm font-bold text-white">${p.name}</h3>
+                                    <p class="text-xs text-slate-500 font-mono mt-0.5">Code: ${p.barcode}</p>
                                 </div>
-                            `;
-                        }).join('')}
-                    </div>
-
-                    <!-- Gestion Tarifs & Stocks -->
-                    <div class="space-y-2.5">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-sky-400">Tarifs & Stocks Catalogue</h3>
-                            <button onclick="openAddCatalogItemModal()" class="text-xs text-sky-400 font-semibold">+ Ajouter</button>
-                        </div>
-                        <div class="space-y-2">
-                            ${appState.catalog.map(item => `
-                                <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-3 flex items-center justify-between">
-                                    <div class="pr-2">
-                                        <p class="text-xs font-semibold text-white">${item.name}</p>
-                                        <p class="text-[10px] text-slate-400">${item.type === 'product' ? 'Produit' : 'Service'} • ${item.barcode || ''}</p>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)"
-                                            class="w-20 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-right text-sky-300 font-bold">
-                                        ${item.type === 'product' ? `
-                                            <input type="number" value="${item.stock}" onchange="updateCatalogStock(${item.id}, this.value)"
-                                                class="w-14 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-center text-emerald-300">
-                                        ` : ''}
-                                    </div>
+                                <div class="text-right">
+                                    <div class="text-sm font-extrabold text-amber-400">${p.price.toLocaleString()} DA</div>
+                                    <div class="text-xs text-slate-400 mt-1">Stock: <span class="font-bold text-white">${p.stock}</span></div>
                                 </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- Bouton Réinitialisation -->
-                    <div class="pt-2">
-                        <button onclick="resetState()" class="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 font-semibold py-3 rounded-xl text-xs">
-                            Réinitialiser toutes les données démo
-                        </button>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             `;
         }
 
-        function updateCatalogPrice(id, val) {
-            const item = appState.catalog.find(c => c.id === id);
-            if (item) {
-                item.price = parseInt(val) || 0;
-                saveState();
+        // --- GESTION CAMÉRA & SCANNER ---
+        let videoStream = null;
+        let scanInterval = null;
+
+        function openScanner(mode) {
+            appState.activeScanMode = mode;
+            const modal = document.getElementById('scannerModal');
+            const title = document.getElementById('scannerTitle');
+            const instruction = document.getElementById('scannerInstruction');
+            
+            if (mode === 'plate') {
+                title.innerHTML = `<i class="fa-solid fa-car-side text-amber-400"></i> Scan Plaque d'Immatriculation`;
+                instruction.innerText = `Pointez la caméra vers la plaque du véhicule`;
+            } else {
+                title.innerHTML = `<i class="fa-solid fa-barcode text-amber-400"></i> Scan Code-barres / QR`;
+                instruction.innerText = `Alignez le code-barres dans le cadre`;
+            }
+
+            modal.classList.remove('hidden');
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(stream => {
+                    videoStream = stream;
+                    const video = document.getElementById('scannerVideo');
+                    video.srcObject = stream;
+                    video.play();
+                    scanInterval = setInterval(processFrame, 500);
+                })
+                .catch(err => {
+                    alert("Erreur d'accès à la caméra : " + err.message);
+                    closeScanner();
+                });
+        }
+
+        function closeScanner() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            document.getElementById('scannerModal').classList.add('hidden');
+        }
+
+        function processFrame() {
+            const video = document.getElementById('scannerVideo');
+            const canvas = document.getElementById('scannerCanvas');
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                if (appState.activeScanMode === 'product') {
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                    if (code) {
+                        handleSuccessfulScan('product', code.data);
+                    }
+                }
             }
         }
 
-        function updateCatalogStock(id, val) {
-            const item = appState.catalog.find(c => c.id === id);
-            if (item && item.type === 'product') {
-                item.stock = parseInt(val) || 0;
-                saveState();
+        function triggerManualCapture() {
+            if (appState.activeScanMode === 'plate') {
+                // Simulation instantanée de reconnaissance plaque
+                const samplePlates = ['01234-116-16', '09876-108-31', '05432-119-09', '02211-112-25'];
+                const detected = samplePlates[Math.floor(Math.random() * samplePlates.length)];
+                handleSuccessfulScan('plate', detected);
+            } else {
+                // Simulation produit
+                const sampleProds = appState.products;
+                const prod = sampleProds[Math.floor(Math.random() * sampleProds.length)];
+                handleSuccessfulScan('product', prod.barcode);
             }
         }
 
-        function openAddUserModal() {
-            openCustomModal(`
-                <form onsubmit="saveNewUser(event)" class="space-y-3.5">
-                    <div class="flex items-center justify-between">
-                        <h3 class="font-bold text-white text-base">Ajouter un Employé</h3>
-                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Nom & Prénom</label>
-                        <input type="text" id="new-emp-name" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Rôle</label>
-                        <select id="new-emp-role" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                            <option value="washer">Lavagiste / Mécano</option>
-                            <option value="cashier">Caissier (Ajout client restreint)</option>
-                            <option value="admin">Administrateur</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Code PIN (4 chiffres)</label>
-                        <input type="text" id="new-emp-pin" maxlength="6" required placeholder="2222" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl text-xs">
-                        Créer le compte employé
-                    </button>
-                </form>
-            `);
-        }
-
-        function saveNewUser(e) {
-            e.preventDefault();
-            const name = document.getElementById('new-emp-name').value.trim();
-            const role = document.getElementById('new-emp-role').value;
-            const pin = document.getElementById('new-emp-pin').value.trim();
-            appState.users.push({ id: Date.now(), name, role, pin, active: true });
-            saveState();
-            closeModal();
-            renderApp();
-        }
-
-        function openChangePinModal(userId) {
-            const user = appState.users.find(u => u.id === userId);
-            if (!user) return;
-            openCustomModal(`
-                <form onsubmit="saveUserPin(event, ${user.id})" class="space-y-3.5">
-                    <div class="flex items-center justify-between">
-                        <h3 class="font-bold text-white text-base">Modifier PIN - ${user.name}</h3>
-                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Nouveau Code PIN</label>
-                        <input type="text" id="update-emp-pin" value="${user.pin}" maxlength="6" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-center text-base tracking-widest text-white">
-                    </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl text-xs">
-                        Enregistrer le nouveau PIN
-                    </button>
-                </form>
-            `);
-        }
-
-        function saveUserPin(e, userId) {
-            e.preventDefault();
-            const user = appState.users.find(u => u.id === userId);
-            if (user) {
-                user.pin = document.getElementById('update-emp-pin').value.trim();
-                saveState();
+        function handleSuccessfulScan(type, data) {
+            closeScanner();
+            if (type === 'plate') {
+                const found = appState.vehicles.find(v => v.plate.includes(data));
+                if (found) {
+                    alert(`Véhicule reconnu !\nPlaque : ${found.plate}\nMarque : ${found.brand}\nPropriétaire : ${found.owner}\nKilométrage : ${found.km} km`);
+                } else {
+                    if (appState.currentUser.role === 'admin') {
+                        if (confirm(`Plaque ${data} non trouvée. Voulez-vous créer un nouveau véhicule ?`)) {
+                            appState.vehicles.unshift({
+                                id: Date.now(),
+                                plate: data,
+                                brand: 'Véhicule Scanné',
+                                owner: 'Client Direct',
+                                km: 10000,
+                                nextVidange: 20000,
+                                status: 'Actif',
+                                lastWash: new Date().toLocaleDateString()
+                            });
+                            saveToStorage();
+                            render();
+                        }
+                    } else {
+                        alert(`Plaque ${data} non enregistrée. (Accès restreint : Seul l'administrateur peut créer un nouveau client).`);
+                    }
+                }
+            } else {
+                const foundProd = appState.products.find(p => p.barcode === data);
+                if (foundProd) {
+                    alert(`Produit trouvé : ${foundProd.name}\nPrix : ${foundProd.price} DA\nStock disponible : ${foundProd.stock}`);
+                } else {
+                    alert(`Code-barres scanné : ${data} (Aucun produit correspondant dans l'inventaire)`);
+                }
             }
-            closeModal();
-            renderApp();
         }
 
-        function openEmployeeHistoryModal(employeeName) {
-            const logs = appState.passages.filter(p => p.employeeName === employeeName);
-            const total = logs.reduce((s, p) => s + p.totalAmount, 0);
+        // --- ACTIONS ADMIN (Véhicules) ---
+        function openAddVehicleModal() {
+            const plate = prompt("Entrez le numéro de plaque (ex: 01234-116-16) :");
+            if (!plate) return;
+            const brand = prompt("Modèle / Marque du véhicule :");
+            const owner = prompt("Nom du propriétaire :");
+            const km = parseInt(prompt("Kilométrage actuel :") || "0");
 
-            openCustomModal(`
-                <div class="space-y-3.5">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <div>
-                            <h3 class="font-bold text-white text-sm">Historique : ${employeeName}</h3>
-                            <p class="text-[11px] text-emerald-400 font-semibold">Total encaissé : ${total.toLocaleString()} DA</p>
-                        </div>
-                        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-
-                    ${logs.length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">Aucune intervention enregistrée pour cet employé.</p>` : `
-                        <div class="space-y-2 max-h-80 overflow-y-auto">
-                            ${logs.map(l => `
-                                <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 space-y-1">
-                                    <div class="flex justify-between text-xs">
-                                        <span class="font-bold text-white">Client : ${l.clientName}</span>
-                                        <span class="text-emerald-400 font-bold">${l.totalAmount.toLocaleString()} DA</span>
-                                    </div>
-                                    <p class="text-[10px] text-slate-400">${l.date}</p>
-                                    <p class="text-[11px] text-slate-300">${l.items.join(', ')}</p>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `}
-                </div>
-            `);
-        }
-
-        function openAddCatalogItemModal() {
-            openCustomModal(`
-                <form onsubmit="saveNewCatalogItem(event)" class="space-y-3.5">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <h3 class="font-bold text-white text-sm">Ajouter un Article / Service</h3>
-                        <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Nom de l'article</label>
-                        <input type="text" id="cat-item-name" required placeholder="Filtre à air..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Type</label>
-                        <select id="cat-item-type" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                            <option value="product">Produit (Stock géré)</option>
-                            <option value="service">Service (Lavage / Vidange)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Prix (DA)</label>
-                        <input type="number" id="cat-item-price" required placeholder="1500" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Stock Initial (si produit)</label>
-                        <input type="number" id="cat-item-stock" value="10" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                    </div>
-                    <button type="submit" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-3 rounded-xl text-xs">
-                        Ajouter au catalogue
-                    </button>
-                </form>
-            `);
-        }
-
-        function saveNewCatalogItem(e) {
-            e.preventDefault();
-            const name = document.getElementById('cat-item-name').value.trim();
-            const type = document.getElementById('cat-item-type').value;
-            const price = parseInt(document.getElementById('cat-item-price').value) || 0;
-            const stock = parseInt(document.getElementById('cat-item-stock').value) || 0;
-
-            appState.catalog.push({
+            appState.vehicles.unshift({
                 id: Date.now(),
-                name, type, price, stock,
-                barcode: 'BC' + Math.floor(10000000 + Math.random() * 90000000)
+                plate: plate,
+                brand: brand || 'Véhicule',
+                owner: owner || 'Client',
+                km: km,
+                nextVidange: km + 10000,
+                status: 'Actif',
+                lastWash: new Date().toLocaleDateString()
             });
-
-            saveState();
-            closeModal();
-            renderApp();
-            showMessage("Article ajouté au catalogue avec succès !", "Succès");
+            saveToStorage();
+            render();
         }
 
-        // ==========================================
-        // 14. BOUCLE DE RENDU PRINCIPALE
-        // ==========================================
-        function renderApp() {
-            const root = document.getElementById('app');
-            if (!root) return;
-
-            if (!appState.currentUser) {
-                root.innerHTML = renderLoginView();
-                return;
+        function editVehicleKm(id) {
+            const v = appState.vehicles.find(item => item.id === id);
+            if (!v) return;
+            const newKm = prompt(`Modifier le kilométrage pour ${v.plate} :`, v.km);
+            if (newKm !== null) {
+                v.km = parseInt(newKm) || v.km;
+                if (v.km >= v.nextVidange) {
+                    v.status = 'Urgent Vidange';
+                } else {
+                    v.status = 'Actif';
+                }
+                saveToStorage();
+                render();
             }
+        }
 
-            let viewHtml = '';
-            switch (appState.currentView) {
-                case 'pos':
-                    viewHtml = renderPosView();
-                    break;
-                case 'journal':
-                    viewHtml = renderJournalView();
-                    break;
-                case 'clients':
-                    viewHtml = renderClientsView();
-                    break;
-                case 'admin':
-                    viewHtml = renderAdminView();
-                    break;
-                case 'home':
-                default:
-                    viewHtml = renderHomeView();
-                    break;
+        function deleteVehicle(id) {
+            if (confirm("Voulez-vous supprimer ce véhicule du parc ?")) {
+                appState.vehicles = appState.vehicles.filter(v => v.id !== id);
+                saveToStorage();
+                render();
             }
-
-            root.innerHTML = `
-                ${renderHeader()}
-                <main class="flex-1 overflow-y-auto no-scrollbar">
-                    ${viewHtml}
-                </main>
-                ${renderBottomNav()}
-            `;
         }
 
-        // Initialisation au chargement
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', renderApp);
-        } else {
-            renderApp();
+        function filterPlates(query) {
+            // Filtrage dynamique simple de la liste
+            const q = query.toLowerCase();
+            const cards = document.querySelectorAll('#vehiclesList > div');
+            cards.forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(q) ? 'block' : 'none';
+            });
         }
+
+        // --- INITIALISATION ---
+        render();
     </script>
 </body>
 </html>
