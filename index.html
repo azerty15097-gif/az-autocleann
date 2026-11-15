@@ -1,2108 +1,849 @@
 <!DOCTYPE html>
-<html lang="fr" class="dark">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AutoClean Pro - Gestion Lavage & Vidange</title>
-    <!-- Tailwind CSS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AZ-AutoClean - Gestion Lavage & Entretien</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome pour les icônes -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
-    
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        navy: {
-                            950: '#070b14',
-                            900: '#0f172a',
-                            800: '#1e293b',
-                            700: '#334155',
-                        },
-                        electric: {
-                            400: '#38bdf8',
-                            500: '#06b6d4',
-                            600: '#0891b2',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        /* Styles personnalisés pour simulation mobile native */
-        body {
-            background-color: #070b14;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-        input, textarea {
-            user-select: text;
-        }
-        /* Masquer les barres de défilement tout en gardant le scroll fluide */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        /* Animation laser du scanner OCR */
-        @keyframes scanLaser {
-            0%, 100% { top: 12%; }
-            50% { top: 85%; }
-        }
-        .laser-line {
-            animation: scanLaser 2.2s ease-in-out infinite;
-            box-shadow: 0 0 15px #06b6d4, 0 0 30px #38bdf8;
-        }
-        /* Plaques d'immatriculation internationales réalistes */
-        .plate-base {
-            background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-            color: #0f172a;
-            border: 2px solid #1e293b;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.28);
-            display: inline-flex;
-            align-items: center;
-            overflow: hidden;
-        }
-        .plate-eu-band {
-            background-color: #003399;
-            color: #ffffff;
-            font-size: 9px;
-            font-weight: 800;
-            padding: 0 5px;
-            align-self: stretch;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-        }
-        .plate-eu-stars {
-            color: #ffcc00;
-            font-size: 7px;
-            letter-spacing: -0.5px;
-            margin-bottom: 1px;
-        }
-        .plate-tn {
-            background: linear-gradient(180deg, #111827 0%, #030712 100%);
-            color: #ffffff;
-            border: 2px solid #475569;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-            display: inline-flex;
-            align-items: center;
-        }
-        /* Styles d'impression pour le reçu */
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            #printable-receipt, #printable-receipt * {
-                visibility: visible;
-            }
-            #printable-receipt {
-                position: fixed;
-                left: 0;
-                top: 0;
-                width: 100%;
-                background: white !important;
-                color: black !important;
-            }
-        }
-    </style>
 </head>
-<body class="text-slate-100 flex justify-center min-h-screen bg-navy-950">
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
 
-    <!-- Conteneur format Mobile App Native (max-w-md centré sur desktop, plein écran sur mobile) -->
-    <div id="app-shell" class="w-full max-w-md bg-navy-900 min-h-screen flex flex-col relative shadow-2xl border-x border-slate-800/80 overflow-hidden">
-
-        <!-- EN-TÊTE FIXE DE L'APPLICATION -->
-        <header class="bg-navy-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3.5 flex items-center justify-between sticky top-0 z-30">
-            <div class="flex items-center gap-2.5">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-electric-500 to-blue-600 flex items-center justify-center shadow-lg shadow-electric-500/20">
-                    <i class="fa-solid fa-car-wash text-white text-lg"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-base tracking-tight text-white leading-tight">AutoClean <span class="text-electric-400">Pro</span></h1>
-                    <p class="text-[11px] text-slate-400 flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Station Tizi-Ouzou • <span id="header-user-badge" class="text-electric-300 font-semibold">Station</span>
-                    </p>
-                </div>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <button id="header-team-btn" onclick="navigateTo('users')" class="hidden bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-2 rounded-xl text-xs font-semibold items-center gap-1 transition active:scale-95" title="Gestion Équipe & Rôles">
-                    <i class="fa-solid fa-user-shield"></i>
-                </button>
-                <button onclick="navigateTo('new-visit')" class="bg-electric-500/15 hover:bg-electric-500/25 text-electric-400 border border-electric-500/30 px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition active:scale-95">
-                    <i class="fa-solid fa-plus"></i> Passage
-                </button>
-                <button onclick="logoutUser()" class="bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700 px-2.5 py-2 rounded-xl text-xs font-semibold transition active:scale-95" title="Déconnexion">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                </button>
-            </div>
-        </header>
-
-        <!-- ZONE DE CONTENU DÉFILANTE -->
-        <main id="main-content" class="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 pt-4">
-            <!-- Le contenu est injecté dynamiquement selon l'onglet actif -->
-        </main>
-
-        <!-- BARRE DE NAVIGATION INFÉRIEURE (STYLE iOS / ANDROID) -->
-        <nav id="bottom-nav" class="fixed bottom-0 w-full max-w-md bg-navy-900/95 backdrop-blur-lg border-t border-slate-800 px-2 py-2 flex justify-around items-center z-30">
-            <button onclick="navigateTo('home')" id="nav-home" class="nav-btn flex flex-col items-center justify-center w-14 py-1 rounded-xl text-electric-400 transition">
-                <i class="fa-solid fa-house text-lg mb-1"></i>
-                <span class="text-[10px] font-semibold">Accueil</span>
-            </button>
-            <button onclick="navigateTo('clients')" id="nav-clients" class="nav-btn flex flex-col items-center justify-center w-14 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition">
-                <i class="fa-solid fa-users text-lg mb-1"></i>
-                <span class="text-[10px] font-medium">Clients</span>
-            </button>
-            <!-- Bouton Central Scan OCR proéminent -->
-            <button onclick="openScannerModal()" class="relative -top-3 w-13 h-13 rounded-2xl bg-gradient-to-tr from-electric-600 to-electric-400 text-navy-950 shadow-lg shadow-electric-500/30 flex items-center justify-center text-xl font-bold border-4 border-navy-900 active:scale-90 transition">
-                <i class="fa-solid fa-expand"></i>
-            </button>
-            <button onclick="navigateTo('appointments')" id="nav-appointments" class="nav-btn flex flex-col items-center justify-center w-14 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition">
-                <i class="fa-solid fa-calendar-days text-lg mb-1"></i>
-                <span class="text-[10px] font-medium">Rendez-vous</span>
-            </button>
-            <button onclick="navigateTo('new-visit')" id="nav-new-visit" class="nav-btn flex flex-col items-center justify-center w-14 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition">
-                <i class="fa-solid fa-file-invoice-dollar text-lg mb-1"></i>
-                <span class="text-[10px] font-medium">Facturer</span>
-            </button>
-            <button onclick="navigateTo('history')" id="nav-history" class="nav-btn flex flex-col items-center justify-center w-14 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition">
-                <i class="fa-solid fa-clock-rotate-left text-lg mb-1"></i>
-                <span class="text-[10px] font-medium">Journal</span>
-            </button>
-        </nav>
-
-        <!-- ÉCRAN DE CONNEXION (LOGIN) -->
-        <div id="login-screen" class="fixed inset-0 bg-navy-950 z-40 flex flex-col justify-between p-5 max-w-md mx-auto overflow-y-auto">
-            <div class="pt-6 text-center space-y-2">
-                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-electric-500 to-blue-600 flex items-center justify-center mx-auto shadow-xl shadow-electric-500/25">
-                    <i class="fa-solid fa-car-wash text-white text-3xl"></i>
-                </div>
-                <h1 class="text-2xl font-extrabold text-white tracking-tight">AutoClean <span class="text-electric-400">Pro</span></h1>
-                <p class="text-xs text-slate-400">Connexion Équipe • Station Lavage & Vidange</p>
-            </div>
-
-            <div class="my-auto py-6 space-y-4">
-                <div class="bg-navy-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-                    <div>
-                        <label class="text-xs font-semibold text-slate-300 block mb-1.5">Identifiant Utilisateur</label>
-                        <div class="relative">
-                            <i class="fa-solid fa-user text-slate-500 absolute left-3.5 top-3.5 text-sm"></i>
-                            <input id="login-username" type="text" placeholder="Ex: admin, sofiane, mourad" class="w-full bg-navy-950 border border-slate-700 focus:border-electric-400 rounded-2xl py-3 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="text-xs font-semibold text-slate-300 block mb-1.5">Code PIN (4 chiffres)</label>
-                        <div class="relative">
-                            <i class="fa-solid fa-lock text-slate-500 absolute left-3.5 top-3.5 text-sm"></i>
-                            <input id="login-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" onkeydown="if(event.key==='Enter') handleLoginSubmit()" class="w-full bg-navy-950 border border-slate-700 focus:border-electric-400 rounded-2xl py-3 pl-10 pr-4 text-sm font-mono tracking-widest text-white placeholder-slate-500 focus:outline-none">
-                        </div>
-                    </div>
-
-                    <button onclick="handleLoginSubmit()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-electric-500 to-blue-600 text-white font-bold text-sm shadow-lg shadow-electric-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-right-to-bracket"></i> Se Connecter
-                    </button>
-                </div>
-
-                <!-- Bouton Accès Portail Client pour Prise de RDV en autonomie -->
-                <button onclick="openClientPortal()" class="w-full py-3 rounded-2xl bg-slate-800 hover:bg-slate-750 text-electric-400 border border-electric-500/30 font-semibold text-xs transition flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-mobile-screen-button"></i> Ouvrir le Portail Client (Prendre un RDV)
-                </button>
-
-                <!-- Accès rapide comptes de démonstration -->
-                <div class="bg-navy-900/60 border border-slate-800/80 rounded-2xl p-3.5 space-y-2">
-                    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">Connexion rapide (Comptes démo)</p>
-                    <div id="demo-accounts-list" class="grid grid-cols-1 gap-1.5">
-                        <!-- Injecté dynamiquement -->
-                    </div>
-                </div>
-            </div>
-
-            <p class="text-center text-[11px] text-slate-500 pb-2">Gestion des accès sécurisée par rôle</p>
-        </div>
-
-        <!-- MODAL : PORTAIL CLIENT (PRISE DE RENDEZ-VOUS AUTONOME) -->
-        <div id="client-portal-modal" class="fixed inset-0 bg-navy-950 z-50 hidden flex-col justify-between p-5 max-w-md mx-auto overflow-y-auto">
-            <div class="flex items-center justify-between pt-2 border-b border-slate-800 pb-3">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-electric-500 to-blue-600 flex items-center justify-center text-white">
-                        <i class="fa-solid fa-calendar-plus text-sm"></i>
-                    </div>
-                    <div>
-                        <h2 class="font-extrabold text-sm text-white">Portail Client • Réservation</h2>
-                        <p class="text-[10px] text-electric-400">AutoClean Pro • Prenez rendez-vous en ligne</p>
-                    </div>
-                </div>
-                <button onclick="closeClientPortal()" class="w-9 h-9 rounded-full bg-slate-800 text-white flex items-center justify-center active:scale-90">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="my-auto py-4 space-y-3.5">
-                <div class="bg-navy-900 border border-slate-800 rounded-3xl p-4 space-y-3">
-                    <p class="text-xs text-slate-300">Remplissez ce formulaire depuis votre smartphone pour planifier votre passage en station :</p>
-
-                    <div>
-                        <label class="text-[11px] text-slate-400 block mb-1">Votre Nom & Prénom *</label>
-                        <input id="cp-name" type="text" placeholder="Ex: Youcef Kaci" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:border-electric-400 focus:outline-none">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="text-[11px] text-slate-400 block mb-1">Votre Numéro de Téléphone *</label>
-                            <input id="cp-phone" type="tel" placeholder="0550..." class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="text-[11px] text-slate-400 block mb-1">Plaque d'Immatriculation *</label>
-                            <input id="cp-plate" type="text" placeholder="12456-124-15" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white uppercase focus:border-electric-400 focus:outline-none">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="text-[11px] text-slate-400 block mb-1">Modèle de votre Véhicule *</label>
-                        <input id="cp-model" type="text" placeholder="Ex: Volkswagen Golf 7" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label class="text-[11px] text-slate-400 block mb-1">Prestation Souhaitée *</label>
-                        <select id="cp-service" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            <option value="Lavage Extérieur (600 DA)">Lavage Extérieur (600 DA)</option>
-                            <option value="Lavage Complet Int/Ext (1200 DA)" selected>Lavage Complet Int/Ext (1200 DA)</option>
-                            <option value="Vidange Semi-Synthétique + Filtre à huile">Vidange Semi-Synthétique + Filtre à huile</option>
-                            <option value="Vidange Huile Synthétique 5W40 + Total Filtres">Vidange Huile Synthétique 5W40 + Total Filtres</option>
-                            <option value="Lustrage & Polissage (2500 DA)">Lustrage & Polissage (2500 DA)</option>
-                        </select>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="text-[11px] text-slate-400 block mb-1">Date Souhaitée *</label>
-                            <input id="cp-date" type="date" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="text-[11px] text-slate-400 block mb-1">Créneau Horaire *</label>
-                            <select id="cp-time" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                                <option value="09:00">09:00 - 09:30</option>
-                                <option value="10:00">10:00 - 10:30</option>
-                                <option value="11:00">11:00 - 11:30</option>
-                                <option value="13:30">13:30 - 14:00</option>
-                                <option value="14:30">14:30 - 15:00</option>
-                                <option value="15:30">15:30 - 16:00</option>
-                                <option value="16:30">16:30 - 17:00</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <button onclick="submitClientPortalAppointment()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-electric-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-electric-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2 mt-2">
-                        <i class="fa-solid fa-paper-plane"></i> Confirmer ma Réservation en Ligne
-                    </button>
-                </div>
-            </div>
-
-            <p class="text-center text-[10px] text-slate-500 pb-2">AutoClean Pro • Synchronisation instantanée avec le planning de la station</p>
-        </div>
-
-        <!-- MODAL : CAMÉRA OCR SCANNER DE PLAQUE -->
-        <div id="scanner-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex-col justify-between p-4 max-w-md mx-auto">
-            <div class="flex items-center justify-between pt-2">
-                <div class="flex items-center gap-2">
-                    <span class="px-2.5 py-1 rounded-full bg-electric-500/20 text-electric-400 text-xs font-semibold border border-electric-500/30">
-                        <i class="fa-solid fa-globe mr-1"></i> OCR Plaques Internationales
-                    </span>
-                </div>
-                <button onclick="closeScannerModal()" class="w-10 h-10 rounded-full bg-slate-800/80 text-white flex items-center justify-center active:scale-90">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-
-            <!-- Viseur Caméra Simulé -->
-            <div class="my-auto flex flex-col items-center">
-                <p class="text-slate-300 text-sm mb-3 text-center">Placez la plaque (DZ, EU, DE, Autre) dans le cadre</p>
-                
-                <div class="relative w-full aspect-[16/10] bg-slate-900 rounded-2xl overflow-hidden border-2 border-slate-700 flex items-center justify-center shadow-2xl">
-                    <!-- Fond caméra simulé -->
-                    <div class="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-600 via-slate-900 to-black"></div>
-                    
-                    <!-- Cadre de ciblage OCR -->
-                    <div class="relative z-10 w-4/5 h-24 rounded-xl border-2 border-electric-400/80 bg-electric-500/5 flex flex-col items-center justify-center p-2">
-                        <!-- Coins du viseur -->
-                        <div class="absolute -top-1 -left-1 w-5 h-5 border-t-4 border-l-4 border-electric-400 rounded-tl-md"></div>
-                        <div class="absolute -top-1 -right-1 w-5 h-5 border-t-4 border-r-4 border-electric-400 rounded-tr-md"></div>
-                        <div class="absolute -bottom-1 -left-1 w-5 h-5 border-b-4 border-l-4 border-electric-400 rounded-bl-md"></div>
-                        <div class="absolute -bottom-1 -right-1 w-5 h-5 border-b-4 border-r-4 border-electric-400 rounded-br-md"></div>
-                        
-                        <!-- Plaque simulée dans le viseur -->
-                        <div id="scanner-preview-plate" class="flex items-center justify-center"></div>
-                        <span id="scanner-status-text" class="text-[11px] text-electric-300 mt-1.5 font-medium">Détection multi-pays active...</span>
-                    </div>
-
-                    <!-- Ligne laser animée -->
-                    <div class="laser-line absolute left-4 right-4 h-0.5 bg-electric-400 z-20"></div>
-                </div>
-
-                <!-- Sélecteur rapide pour tester différents scénarios de scan internationaux -->
-                <div class="w-full mt-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-3">
-                    <p class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold mb-2 text-center">Simuler une plaque devant la caméra :</p>
-                    <div id="scan-presets" class="flex flex-wrap gap-1.5 justify-center">
-                        <!-- Boutons générés dynamiquement -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bouton de capture OCR -->
-            <div class="pb-4 flex flex-col items-center gap-3">
-                <button onclick="triggerOcrCapture()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-electric-500 to-blue-600 text-white font-bold text-base shadow-lg shadow-electric-500/30 flex items-center justify-center gap-2.5 active:scale-95 transition">
-                    <i class="fa-solid fa-camera-viewfinder text-xl"></i>
-                    Capturer & Identifier la Plaque
-                </button>
-            </div>
-        </div>
-
-        <!-- MODAL : FACTURE / REÇU DÉTAILLÉ & PARTAGE WHATSAPP -->
-        <div id="receipt-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4 max-w-md mx-auto">
-            <div class="bg-white text-slate-900 w-full rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                <!-- Contenu imprimable -->
-                <div id="printable-receipt" class="p-5 overflow-y-auto">
-                    <div class="text-center border-b-2 border-dashed border-slate-300 pb-4">
-                        <div class="w-12 h-12 rounded-2xl bg-navy-900 text-electric-400 flex items-center justify-center mx-auto mb-2 text-xl">
-                            <i class="fa-solid fa-car-wash"></i>
-                        </div>
-                        <h2 class="font-extrabold text-lg tracking-tight text-slate-900">AUTOCLEAN PRO</h2>
-                        <p class="text-xs text-slate-500">Station Lavage Auto, Vidange & Accessoires</p>
-                        <p class="text-[11px] text-slate-500">Boulevard Krim Belkacem, Tizi-Ouzou • Tél: 0550 12 34 56</p>
-                    </div>
-
-                    <div id="receipt-body" class="py-4 text-xs space-y-3">
-                        <!-- Injecté dynamiquement -->
-                    </div>
-
-                    <div class="border-t-2 border-dashed border-slate-300 pt-3 text-center text-[11px] text-slate-500">
-                        <p class="font-semibold text-slate-700">Merci pour votre confiance !</p>
-                        <p>Conservez ce ticket pour le suivi de votre prochaine vidange.</p>
-                    </div>
-                </div>
-
-                <!-- Actions du reçu -->
-                <div class="bg-slate-100 p-3.5 border-t border-slate-200 grid grid-cols-3 gap-2">
-                    <button onclick="shareReceiptWhatsApp()" class="bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition">
-                        <i class="fa-brands fa-whatsapp text-base"></i> WhatsApp
-                    </button>
-                    <button onclick="window.print()" class="bg-navy-800 hover:bg-navy-900 text-white py-2.5 px-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition">
-                        <i class="fa-solid fa-print"></i> Imprimer
-                    </button>
-                    <button onclick="closeReceiptModal()" class="bg-slate-300 hover:bg-slate-400 text-slate-800 py-2.5 px-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition">
-                        Fermer
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- NOTIFICATION TOAST PERSONNALISÉE -->
-        <div id="toast-box" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 w-[90%] max-w-sm">
-            <div class="bg-navy-800 border border-electric-500/40 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-                <i id="toast-icon" class="fa-solid fa-circle-check text-electric-400 text-lg"></i>
-                <span id="toast-msg" class="text-xs font-medium leading-snug">Notification</span>
-            </div>
-        </div>
-
+    <!-- CONTENEUR PRINCIPAL DE L'APPLICATION -->
+    <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-950 shadow-2xl relative overflow-hidden">
+        <!-- Le contenu dynamique est injecté ici par JavaScript -->
     </div>
 
-    <!-- LOGIQUE JAVASCRIPT COMPLÈTE -->
     <script>
-        // ==========================================
-        // 1. CATALOGUE & RÉFÉRENTIEL PAYS (Sans TN & MA)
-        // ==========================================
-        const SERVICES_CATALOG = [
-            { id: 'lav_ext', name: 'Lavage Extérieur', category: 'lavage', price: 600 },
-            { id: 'lav_comp', name: 'Lavage Complet Int/Ext', category: 'lavage', price: 1200 },
-            { id: 'lav_mot', name: 'Lavage Moteur', category: 'lavage', price: 800 },
-            { id: 'lav_lust', name: 'Lustrage & Polissage', category: 'lavage', price: 2500 },
-            { id: 'vid_semi', name: 'Vidange Semi-Synthétique 10W40', category: 'vidange', price: 3200, isOilChange: true },
-            { id: 'vid_synth', name: 'Vidange Huile Synthétique 5W40', category: 'vidange', price: 4500, isOilChange: true },
-            { id: 'flt_huile', name: 'Filtre à Huile', category: 'vidange', price: 1200, filterKey: 'huile' },
-            { id: 'flt_air', name: 'Filtre à Air', category: 'vidange', price: 1500, filterKey: 'air' },
-            { id: 'flt_hab', name: 'Filtre Habitacle (Clim)', category: 'vidange', price: 1400, filterKey: 'habitacle' },
-            { id: 'flt_carb', name: 'Filtre Carburant (Gasoil/Ess)', category: 'vidange', price: 2200, filterKey: 'carburant' },
-            { id: 'acc_deso', name: 'Désodorisant / Sapin Auto', category: 'accessoire', price: 300 },
-            { id: 'acc_lave', name: 'Liquide Lave-Glace 5L', category: 'accessoire', price: 650 },
-            { id: 'acc_micro', name: 'Chiffon Microfibre Pro', category: 'accessoire', price: 450 },
-            { id: 'acc_plast', name: 'Rénovateur Plastique', category: 'accessoire', price: 900 }
-        ];
-
-        const COUNTRY_META = {
-            DZ: { code: 'DZ', label: 'Algérie', flag: '🇩🇿' },
-            FR: { code: 'F', label: 'France', flag: '🇫🇷' },
-            EU: { code: 'EU', label: 'Europe', flag: '🇪🇺' },
-            DE: { code: 'D', label: 'Allemagne', flag: '🇩🇪' },
-            INT: { code: 'INT', label: 'Étranger', flag: '🌍' }
-        };
-
-        function normalizePlate(raw) {
-            return (raw || '').toUpperCase().trim().replace(/\s+/g, ' ');
-        }
-
-        // ==========================================
-        // 2. DONNÉES DE DÉMONSTRATION PRÉ-CHARGÉES (DZ + EU + DE)
-        // ==========================================
+        // --- BASE DE DONNÉES INITIALE & CONFIGURATION ---
         const DEFAULT_USERS = [
-            { id: 'u1', name: 'Administrateur Principal', username: 'admin', pin: '1234', role: 'ADMIN', active: true },
-            { id: 'u2', name: 'Sofiane (Caissier)', username: 'sofiane', pin: '1111', role: 'CAISSIER', active: true },
-            { id: 'u3', name: 'Mourad (Lavagiste)', username: 'mourad', pin: '2222', role: 'LAVAGISTE', active: true }
+            { id: 1, name: "Karim Benali", username: "admin", pin: "1234", role: "admin", active: true },
+            { id: 2, name: "Sofiane Hadj", username: "sofiane", pin: "1111", role: "cashier", active: true },
+            { id: 3, name: "Mourad Ziani", username: "mourad", pin: "2222", role: "washer", active: true }
         ];
 
         const ROLES_CONFIG = {
-            ADMIN: { label: 'Administrateur', icon: 'fa-user-shield', badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30', description: 'Accès complet : gestion des utilisateurs, rôles, finances et tous les services.' },
-            CAISSIER: { label: 'Caissier / Réception', icon: 'fa-cash-register', badgeClass: 'bg-electric-500/20 text-electric-300 border-electric-500/30', description: 'Encaissement des factures, recettes du jour, gestion des clients et rendez-vous.' },
-            LAVAGISTE: { label: 'Lavagiste / Équipe', icon: 'fa-car-wash', badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', description: 'Scan des plaques, consultation historique, inscription des véhicules en station.' }
+            admin: { label: "Administrateur", badge: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+            cashier: { label: "Caissier", badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+            washer: { label: "Lavagiste / Mécano", badge: "bg-blue-500/20 text-blue-400 border-blue-500/30" }
         };
 
-        const DEFAULT_DATA = {
-            vehicles: [
-                {
-                    id: 'v1',
-                    plate: '12456-124-15',
-                    country: 'DZ',
-                    ownerName: 'Karim Benali',
-                    phone: '0552 48 91 20',
-                    model: 'Renault Clio 5',
-                    mileage: 78500,
-                    inStation: true,
-                    stationStatus: 'En cours de lavage',
-                    maintenance: {
-                        lastOilChangeDate: '2026-08-14',
-                        lastOilChangeKm: 70000,
-                        nextOilChangeKm: 80000,
-                        filters: {
-                            huile: { date: '2026-08-14', km: 70000 },
-                            air: { date: '2026-08-14', km: 70000 },
-                            habitacle: { date: '2026-03-10', km: 60000 },
-                            carburant: { date: '2026-03-10', km: 60000 }
-                        }
-                    },
-                    invoices: [
-                        {
-                            id: 'FAC-2026-089',
-                            date: '2026-11-10',
-                            mileage: 78200,
-                            items: [
-                                { id: 'lav_comp', name: 'Lavage Complet Int/Ext', qty: 1, price: 1200 },
-                                { id: 'acc_deso', name: 'Désodorisant / Sapin Auto', qty: 1, price: 300 }
-                            ],
-                            total: 1500
-                        },
-                        {
-                            id: 'FAC-2026-042',
-                            date: '2026-08-14',
-                            mileage: 70000,
-                            items: [
-                                { id: 'vid_synth', name: 'Vidange Huile Synthétique 5W40', qty: 1, price: 4500 },
-                                { id: 'flt_huile', name: 'Filtre à Huile', qty: 1, price: 1200 },
-                                { id: 'flt_air', name: 'Filtre à Air', qty: 1, price: 1500 },
-                                { id: 'lav_ext', name: 'Lavage Extérieur', qty: 1, price: 600 }
-                            ],
-                            total: 7800
-                        }
-                    ]
-                },
-                {
-                    id: 'v_fr1',
-                    plate: 'GC-842-TR',
-                    country: 'FR',
-                    ownerName: 'Mehdi Hamidi (France)',
-                    phone: '+33 6 42 88 19 05',
-                    model: 'Peugeot 3008 GT Line',
-                    mileage: 64200,
-                    inStation: true,
-                    stationStatus: 'Lavage Complet + Lustrage',
-                    maintenance: {
-                        lastOilChangeDate: '2026-07-22',
-                        lastOilChangeKm: 58000,
-                        nextOilChangeKm: 68000,
-                        filters: {
-                            huile: { date: '2026-07-22', km: 58000 },
-                            air: { date: '2026-07-22', km: 58000 },
-                            habitacle: { date: '2026-07-22', km: 58000 },
-                            carburant: null
-                        }
-                    },
-                    invoices: [
-                        {
-                            id: 'FAC-2026-091',
-                            date: '2026-11-12',
-                            mileage: 64200,
-                            items: [
-                                { id: 'lav_comp', name: 'Lavage Complet Int/Ext', qty: 1, price: 1200 },
-                                { id: 'lav_lust', name: 'Lustrage & Polissage', qty: 1, price: 2500 },
-                                { id: 'acc_micro', name: 'Chiffon Microfibre Pro', qty: 2, price: 450 }
-                            ],
-                            total: 4600
-                        }
-                    ]
-                },
-                {
-                    id: 'v_de1',
-                    plate: 'M-AB 4512',
-                    country: 'DE',
-                    ownerName: 'Tariq Mansouri (Allemagne)',
-                    phone: '+49 172 8941200',
-                    model: 'Mercedes Classe C 220d',
-                    mileage: 112000,
-                    inStation: false,
-                    stationStatus: 'Terminé',
-                    maintenance: {
-                        lastOilChangeDate: '2026-10-15',
-                        lastOilChangeKm: 110000,
-                        nextOilChangeKm: 120000,
-                        filters: {
-                            huile: { date: '2026-10-15', km: 110000 },
-                            air: { date: '2026-10-15', km: 110000 },
-                            habitacle: { date: '2026-10-15', km: 110000 },
-                            carburant: { date: '2026-10-15', km: 110000 }
-                        }
-                    },
-                    invoices: [
-                        {
-                            id: 'FAC-2026-081',
-                            date: '2026-10-15',
-                            mileage: 110000,
-                            items: [
-                                { id: 'vid_synth', name: 'Vidange Huile Synthétique 5W40', qty: 1, price: 4500 },
-                                { id: 'flt_huile', name: 'Filtre à Huile', qty: 1, price: 1200 },
-                                { id: 'flt_air', name: 'Filtre à Air', qty: 1, price: 1500 },
-                                { id: 'flt_hab', name: 'Filtre Habitacle (Clim)', qty: 1, price: 1400 },
-                                { id: 'flt_carb', name: 'Filtre Carburant (Gasoil/Ess)', qty: 1, price: 2200 },
-                                { id: 'lav_comp', name: 'Lavage Complet Int/Ext', qty: 1, price: 1200 }
-                            ],
-                            total: 12000
-                        }
-                    ]
-                }
-            ],
-            appointments: [
-                {
-                    id: 'RDV-101',
-                    clientName: 'Amine Boudiaf',
-                    phone: '0551 22 33 44',
-                    plate: '04512-115-16',
-                    model: 'Hyundai i20',
-                    service: 'Vidange 5W40 + Filtre à Huile',
-                    date: new Date().toISOString().split('T')[0],
-                    time: '10:30',
-                    status: 'CONFIRME'
-                },
-                {
-                    id: 'RDV-102',
-                    clientName: 'Sarah Kaci',
-                    phone: '0660 99 88 77',
-                    plate: '18920-101-15',
-                    model: 'Seat Ibiza',
-                    service: 'Lavage Complet Int/Ext',
-                    date: new Date().toISOString().split('T')[0],
-                    time: '14:00',
-                    status: 'CONFIRME'
-                }
-            ]
+        const COUNTRY_META = {
+            'DZ': { name: 'Algérie', flag: '🇩🇿', format: '12345-123-16' },
+            'EU': { name: 'EU', flag: '🇪🇺', format: 'AB-123-CD' },
+            'OTHER': { name: 'Autre format', flag: '🌐', format: 'Libre' }
         };
 
-        // ==========================================
-        // 3. ÉTAT & PERSISTANCE
-        // ==========================================
+        const DEFAULT_CATALOG = [
+            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800 },
+            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500 },
+            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000 },
+            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200 },
+            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500 },
+            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300 },
+            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800 },
+            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500 },
+            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500 },
+            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300 }
+        ];
+
         let appState = {
-            vehicles: [],
-            appointments: [],
-            users: [],
             currentUser: null,
-            currentTab: 'home',
-            selectedVehicleId: null,
-            searchQuery: '',
-            billingForm: {
-                isNewClient: true,
-                vehicleId: null,
-                plate: '',
-                country: 'AUTO',
-                ownerName: '',
-                phone: '',
-                model: '',
-                mileage: '',
-                nextOilKm: '',
-                selectedItems: {},
-                inStation: true
-            },
-            appointmentForm: {
-                clientName: '',
-                phone: '',
-                plate: '',
-                model: '',
-                service: 'Lavage Complet Int/Ext',
-                date: new Date().toISOString().split('T')[0],
-                time: '09:00'
-            },
-            activeReceipt: null,
-            simulatedScanPlate: '12456-124-15',
-            simulatedScanCountry: 'DZ'
+            currentView: 'login',
+            users: JSON.parse(localStorage.getItem('autoclean_users')) || DEFAULT_USERS,
+            catalog: JSON.parse(localStorage.getItem('autoclean_catalog')) || DEFAULT_CATALOG,
+            clients: JSON.parse(localStorage.getItem('autoclean_clients')) || [
+                { id: 1, name: "Rachid Kaci", phone: "+213 555 12 34 56", totalSpent: 7300 },
+                { id: 2, name: "Amine Meziane", phone: "+213 661 98 76 54", totalSpent: 4100 }
+            ],
+            vehicles: JSON.parse(localStorage.getItem('autoclean_vehicles')) || [
+                { id: 1, clientId: 1, plate: "01234-116-15", model: "Renault Clio 4 (2022)", mileage: 45000, country: 'DZ' },
+                { id: 2, clientId: 2, plate: "AB-842-TR", model: "Peugeot 3008", mileage: 62000, country: 'EU' }
+            ],
+            passages: JSON.parse(localStorage.getItem('autoclean_passages')) || [
+                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, nextVidangeKm: 55000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
+                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, nextVidangeKm: 72000, totalAmount: 1500, items: ["Lavage Complet"] }
+            ],
+            adminTab: 'users'
         };
-
-        function loadState() {
-            try {
-                const saved = localStorage.getItem('autoclean_pro_db_v3');
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    appState.vehicles = parsed.vehicles || DEFAULT_DATA.vehicles;
-                    appState.appointments = parsed.appointments || DEFAULT_DATA.appointments;
-                } else {
-                    appState.vehicles = JSON.parse(JSON.stringify(DEFAULT_DATA.vehicles));
-                    appState.appointments = JSON.parse(JSON.stringify(DEFAULT_DATA.appointments));
-                    saveState();
-                }
-
-                const savedUsers = localStorage.getItem('autoclean_pro_users_v1');
-                if (savedUsers) {
-                    appState.users = JSON.parse(savedUsers);
-                } else {
-                    appState.users = JSON.parse(JSON.stringify(DEFAULT_USERS));
-                    saveUsers();
-                }
-
-                const savedSession = sessionStorage.getItem('autoclean_pro_session');
-                if (savedSession) {
-                    const parsed = JSON.parse(savedSession);
-                    const freshUser = appState.users.find(u => u.id === parsed.id && u.active);
-                    if (freshUser) appState.currentUser = freshUser;
-                }
-            } catch (e) {
-                appState.vehicles = JSON.parse(JSON.stringify(DEFAULT_DATA.vehicles));
-                appState.appointments = JSON.parse(JSON.stringify(DEFAULT_DATA.appointments));
-                appState.users = JSON.parse(JSON.stringify(DEFAULT_USERS));
-            }
-        }
 
         function saveState() {
-            try {
-                localStorage.setItem('autoclean_pro_db_v3', JSON.stringify({
-                    vehicles: appState.vehicles,
-                    appointments: appState.appointments
-                }));
-            } catch (e) {
-                console.error('Erreur sauvegarde localStorage:', e);
-            }
+            localStorage.setItem('autoclean_users', JSON.stringify(appState.users));
+            localStorage.setItem('autoclean_catalog', JSON.stringify(appState.catalog));
+            localStorage.setItem('autoclean_clients', JSON.stringify(appState.clients));
+            localStorage.setItem('autoclean_vehicles', JSON.stringify(appState.vehicles));
+            localStorage.setItem('autoclean_passages', JSON.stringify(appState.passages));
         }
 
-        function saveUsers() {
-            try {
-                localStorage.setItem('autoclean_pro_users_v1', JSON.stringify(appState.users));
-            } catch (e) {
-                console.error('Erreur sauvegarde users:', e);
-            }
-        }
+        // --- AUTHENTIFICATION ---
+        function loginUser(e) {
+            if(e) e.preventDefault();
+            const username = document.getElementById('login-user').value.trim().toLowerCase();
+            const pin = document.getElementById('login-pin').value.trim();
+            const errorDiv = document.getElementById('login-error');
 
-        function hasPermission(perm) {
-            if (!appState.currentUser) return false;
-            const role = appState.currentUser.role;
-            if (role === 'ADMIN') return true;
-            if (perm === 'MANAGE_USERS') return false;
-            if (perm === 'VIEW_REVENUE') return role === 'CAISSIER';
-            return true;
-        }
-
-        function compactPlateKey(raw) {
-            return (raw || '').toUpperCase().replace(/[\s\-_]/g, '');
-        }
-
-        function detectPlateCountry(plate, explicitCountry = 'AUTO') {
-            if (explicitCountry && explicitCountry !== 'AUTO' && COUNTRY_META[explicitCountry]) {
-                return explicitCountry;
-            }
-            const p = normalizePlate(plate);
-            if (!p) return 'INT';
-            if (/^\d{4,6}[\s\-]\d{3}[\s\-]\d{2}$/.test(p)) return 'DZ';
-            if (/^[A-Z]{2}[\s\-]\d{3}[\s\-][A-Z]{2}$/.test(p)) return 'FR';
-            if (/^[A-Z]{1,3}[\s\-][A-Z]{1,2}[\s\-]?\d{1,4}$/.test(p)) return 'DE';
-            if (/^\d{4}[\s\-][A-Z]{3}$/.test(p)) return 'EU';
-            return 'INT';
-        }
-
-        function renderLicensePlateBadge(plate, countryCode = 'AUTO', size = 'sm') {
-            const detected = detectPlateCountry(plate, countryCode);
-            const cleanText = normalizePlate(plate) || '---';
-            const textSize = size === 'lg' ? 'text-xl px-3.5 py-1.5' : (size === 'md' ? 'text-sm px-2.5 py-1' : 'text-xs px-2 py-0.5');
-
-            if (detected === 'TN') {
-                return `
-                    <span class="plate-tn rounded font-mono font-bold tracking-wider ${textSize}">
-                        ${cleanText}
-                    </span>
-                `;
-            }
-
-            if (detected === 'FR' || detected === 'DE' || detected === 'EU') {
-                const euCode = COUNTRY_META[detected].code;
-                return `
-                    <span class="plate-base rounded font-mono font-bold tracking-wider">
-                        <span class="plate-eu-band">
-                            <span class="plate-eu-stars">★★★</span>
-                            <span>${euCode}</span>
-                        </span>
-                        <span class="${textSize}">${cleanText}</span>
-                    </span>
-                `;
-            }
-
-            return `
-                <span class="plate-base rounded font-mono font-bold tracking-wider ${textSize}">
-                    ${cleanText}
-                </span>
-            `;
-        }
-
-        // Helpers Formatage
-        function formatDZD(amount) {
-            return Number(amount || 0).toLocaleString('fr-FR') + ' DA';
-        }
-
-        function formatDateFR(dateStr) {
-            if (!dateStr) return 'Jamais';
-            const d = new Date(dateStr);
-            if (isNaN(d)) return dateStr;
-            return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-        }
-
-        function getVehicleTotalSpent(vehicle) {
-            return vehicle.invoices.reduce((sum, inv) => sum + inv.total, 0);
-        }
-
-        function showToast(msg, iconClass = 'fa-circle-check text-electric-400') {
-            const box = document.getElementById('toast-box');
-            document.getElementById('toast-msg').textContent = msg;
-            document.getElementById('toast-icon').className = `fa-solid ${iconClass} text-lg`;
-            box.classList.remove('opacity-0', '-translate-y-2');
-            box.classList.add('opacity-100', 'translate-y-0');
-            setTimeout(() => {
-                box.classList.add('opacity-0', '-translate-y-2');
-                box.classList.remove('opacity-100', 'translate-y-0');
-            }, 3200);
-        }
-
-        // ==========================================
-        // 4. NAVIGATION PRINCIPALE
-        // ==========================================
-        function navigateTo(tab, payload = null) {
-            if (tab === 'users' && !hasPermission('MANAGE_USERS')) {
-                showToast('Accès réservé à l’Administrateur', 'fa-lock text-rose-400');
+            const found = appState.users.find(u => u.username === username && u.pin === pin);
+            if(!found) {
+                errorDiv.classList.remove('hidden');
                 return;
             }
-            appState.currentTab = tab;
-
-            // Mise à jour style onglets inférieurs
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('text-electric-400');
-                btn.classList.add('text-slate-400');
-            });
-            const activeBtn = document.getElementById(`nav-${tab}`);
-            if (activeBtn) {
-                activeBtn.classList.remove('text-slate-400');
-                activeBtn.classList.add('text-electric-400');
-            }
-
-            if (tab === 'vehicle-detail' && payload) {
-                appState.selectedVehicleId = payload;
-            }
-
-            if (tab === 'new-visit') {
-                prepareBillingForm(payload);
-            }
-
-            renderCurrentView();
-            document.getElementById('main-content').scrollTop = 0;
-        }
-
-        function renderCurrentView() {
-            const container = document.getElementById('main-content');
-            switch (appState.currentTab) {
-                case 'home':
-                    container.innerHTML = renderHomeView();
-                    break;
-                case 'clients':
-                    container.innerHTML = renderClientsView();
-                    break;
-                case 'appointments':
-                    container.innerHTML = renderAppointmentsView();
-                    break;
-                case 'vehicle-detail':
-                    container.innerHTML = renderVehicleDetailView();
-                    break;
-                case 'new-visit':
-                    container.innerHTML = renderBillingView();
-                    break;
-                case 'history':
-                    container.innerHTML = renderHistoryView();
-                    break;
-                case 'users':
-                    container.innerHTML = renderUsersManagementView();
-                    break;
-            }
-        }
-
-        // ==========================================
-        // 5B. HELPERS DE RENDU VÉHICULE & VUES SECONDAIRES
-        // ==========================================
-        function renderVehicleCardCompact(v, showStatus = false) {
-            const countryCode = detectPlateCountry(v.plate, v.country);
-            const totalSpent = getVehicleTotalSpent(v);
-            const badge = renderLicensePlateBadge(v.plate, v.country, 'sm');
-
-            return `
-                <div onclick="navigateTo('vehicle-detail', '${v.id}')" class="bg-navy-800 hover:bg-navy-750 border border-slate-700/80 rounded-2xl p-3 flex items-center justify-between cursor-pointer active:scale-[0.99] transition shadow-md">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-electric-500/15 text-electric-400 flex items-center justify-center text-base shrink-0">
-                            <i class="fa-solid fa-car"></i>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2 mb-1">
-                                ${badge}
-                                <span class="text-xs font-bold text-white">${v.model}</span>
-                            </div>
-                            <p class="text-[11px] text-slate-400">${v.ownerName} • <span class="text-slate-300 font-mono">${v.phone}</span></p>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        ${showStatus ? `
-                            <span class="inline-block px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-semibold mb-1 border border-amber-500/30">
-                                ${v.stationStatus || 'En baie'}
-                            </span>
-                        ` : `
-                            <p class="text-xs font-extrabold text-electric-400">${formatDZD(totalSpent)}</p>
-                            <p class="text-[10px] text-slate-400">${v.mileage.toLocaleString('fr-FR')} km</p>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderClientsView() {
-            const vehicles = appState.vehicles;
-            return `
-                <div class="space-y-4 pb-6">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-base font-extrabold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-users text-electric-400"></i> Répertoire Clients & Véhicules (${vehicles.length})
-                        </h2>
-                        <button onclick="navigateTo('new-visit')" class="bg-electric-500 text-navy-950 font-bold text-xs px-3 py-2 rounded-xl">
-                            + Nouveau
-                        </button>
-                    </div>
-
-                    <div class="space-y-2.5">
-                        ${vehicles.length === 0 ? `
-                            <p class="text-center text-xs text-slate-400 py-8">Aucun client enregistré.</p>
-                        ` : vehicles.map(v => renderVehicleCardCompact(v)).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderVehicleDetailView() {
-            const v = appState.vehicles.find(item => item.id === appState.selectedVehicleId);
-            if (!v) {
-                return `<div class="text-center py-10"><p class="text-xs text-slate-400">Véhicule introuvable.</p><button onclick="navigateTo('home')" class="mt-3 text-xs text-electric-400 underline">Retour Accueil</button></div>`;
-            }
-
-            const totalSpent = getVehicleTotalSpent(v);
-            const filters = v.maintenance.filters;
-
-            return `
-                <div class="space-y-4 pb-6">
-                    <div class="flex items-center justify-between">
-                        <button onclick="navigateTo('home')" class="text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 bg-navy-800 px-3 py-2 rounded-xl border border-slate-700">
-                            <i class="fa-solid fa-arrow-left"></i> Accueil
-                        </button>
-                        <div class="flex items-center gap-2">
-                            <button onclick="navigateTo('new-visit', { prefillPlate: '${v.plate}' })" class="bg-electric-500 text-navy-950 font-bold text-xs px-3 py-2 rounded-xl">
-                                + Facturer Passage
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- CARTE IDENTITÉ VÉHICULE & CLIENT -->
-                    <div class="bg-navy-800 border border-slate-700 rounded-3xl p-4 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Propriétaire</span>
-                                <h2 class="text-base font-extrabold text-white">${v.ownerName}</h2>
-                                <p class="text-xs text-slate-300 font-mono mt-0.5"><i class="fa-solid fa-phone text-electric-400 mr-1"></i>${v.phone}</p>
-                            </div>
-                            <div class="text-right">
-                                ${renderLicensePlateBadge(v.plate, v.country, 'md')}
-                                <p class="text-xs font-bold text-electric-400 mt-1">${v.model}</p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
-                            <div class="bg-navy-950/60 rounded-2xl p-2.5">
-                                <span class="text-[10px] text-slate-400 block">Kilométrage Actuel</span>
-                                <span class="text-sm font-mono font-bold text-white">${v.mileage.toLocaleString('fr-FR')} km</span>
-                            </div>
-                            <div class="bg-navy-950/60 rounded-2xl p-2.5">
-                                <span class="text-[10px] text-slate-400 block">Total Dépensé</span>
-                                <span class="text-sm font-extrabold text-electric-400">${formatDZD(totalSpent)}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ÉTAT ENTRETIEN & VIDANGE -->
-                    <div class="bg-navy-800 border border-slate-700 rounded-3xl p-4 space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                            <i class="fa-solid fa-oil-can"></i> Suivi Vidange & Filtres
-                        </h3>
-
-                        <div class="bg-navy-950/80 border border-slate-800 rounded-2xl p-3 space-y-1.5">
-                            <div class="flex justify-between text-xs">
-                                <span class="text-slate-400">Dernière vidange :</span>
-                                <span class="font-bold text-white">${formatDateFR(v.maintenance.lastOilChangeDate)} (${v.maintenance.lastOilChangeKm.toLocaleString('fr-FR')} km)</span>
-                            </div>
-                            <div class="flex justify-between text-xs">
-                                <span class="text-slate-400">Prochaine vidange :</span>
-                                <span class="font-mono font-bold text-amber-300">${v.maintenance.nextOilChangeKm.toLocaleString('fr-FR')} km</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Historique des 4 Filtres :</p>
-                            <div class="grid grid-cols-2 gap-2">
-                                ${Object.entries(filters).map(([key, f]) => `
-                                    <div class="bg-navy-950/60 border border-slate-800 rounded-xl p-2">
-                                        <span class="text-[10px] font-bold uppercase text-slate-300 block">${key}</span>
-                                        ${f ? `<span class="text-[11px] text-emerald-400 font-mono">${formatDateFR(f.date)}<br>(${f.km.toLocaleString('fr-FR')} km)</span>` : `<span class="text-[11px] text-slate-500">Non enregistré</span>`}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- HISTORIQUE DES FACTURES -->
-                    <div class="space-y-2.5">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Historique des Passages (${v.invoices.length})</h3>
-                        ${v.invoices.length === 0 ? `
-                            <p class="text-center text-xs text-slate-400 py-4">Aucune facture enregistrée pour ce véhicule.</p>
-                        ` : v.invoices.map(inv => `
-                            <div class="bg-navy-800/80 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-mono font-bold text-electric-400">${inv.id}</span>
-                                    <span class="text-xs text-slate-400">${formatDateFR(inv.date)} • <span class="font-mono">${inv.mileage.toLocaleString('fr-FR')} km</span></span>
-                                </div>
-                                <div class="text-xs space-y-1 py-1 border-y border-slate-700/60">
-                                    ${inv.items.map(item => `<div class="flex justify-between text-slate-300"><span>• ${item.name} (x${item.qty})</span><span class="font-mono">${formatDZD(item.price * item.qty)}</span></div>`).join('')}
-                                </div>
-                                <div class="flex items-center justify-between pt-1">
-                                    <span class="text-xs font-extrabold text-white">Total : ${formatDZD(inv.total)}</span>
-                                    <button onclick="openReceiptModal('${v.id}', '${inv.id}')" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1.5 rounded-xl font-semibold flex items-center gap-1.5">
-                                        <i class="fa-solid fa-file-lines text-electric-400"></i> Voir Reçu
-                                    </button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderHistoryView() {
-            let allInvoices = [];
-            appState.vehicles.forEach(v => {
-                v.invoices.forEach(inv => {
-                    allInvoices.push({ ...inv, vehicle: v });
-                });
-            });
-            allInvoices.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-            return `
-                <div class="space-y-4 pb-6">
-                    <h2 class="text-base font-extrabold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-clock-rotate-left text-electric-400"></i> Journal Global des Passages (${allInvoices.length})
-                    </h2>
-
-                    <div class="space-y-2.5">
-                        ${allInvoices.length === 0 ? `
-                            <p class="text-center text-xs text-slate-400 py-8">Aucun passage enregistré.</p>
-                        ` : allInvoices.map(inv => `
-                            <div class="bg-navy-800 border border-slate-700/80 rounded-2xl p-3.5 space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        ${renderLicensePlateBadge(inv.vehicle.plate, inv.vehicle.country, 'sm')}
-                                        <span class="text-xs font-bold text-white">${inv.vehicle.model}</span>
-                                    </div>
-                                    <span class="text-xs font-mono font-bold text-electric-400">${formatDZD(inv.total)}</span>
-                                </div>
-                                <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-700/60">
-                                    <span>${inv.vehicle.ownerName} • ${formatDateFR(inv.date)}</span>
-                                    <button onclick="openReceiptModal('${inv.vehicle.id}', '${inv.id}')" class="text-electric-300 font-semibold underline">
-                                        Facture ${inv.id}
-                                    </button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function prepareBillingForm(payload) {
-            appState.billingForm = {
-                isNewClient: true,
-                vehicleId: null,
-                plate: payload && payload.prefillPlate ? payload.prefillPlate : '',
-                country: payload && payload.prefillCountry ? payload.prefillCountry : 'AUTO',
-                ownerName: '',
-                phone: '',
-                model: '',
-                mileage: '',
-                nextOilKm: '',
-                selectedItems: { 'lav_comp': 1 },
-                inStation: true
-            };
-
-            if (payload && payload.prefillPlate) {
-                const match = appState.vehicles.find(v => compactPlateKey(v.plate) === compactPlateKey(payload.prefillPlate));
-                if (match) {
-                    appState.billingForm.isNewClient = false;
-                    appState.billingForm.vehicleId = match.id;
-                    appState.billingForm.plate = match.plate;
-                    appState.billingForm.ownerName = match.ownerName;
-                    appState.billingForm.phone = match.phone;
-                    appState.billingForm.model = match.model;
-                    appState.billingForm.mileage = match.mileage + 500;
-                    appState.billingForm.nextOilKm = match.maintenance.nextOilChangeKm || (match.mileage + 10000);
-                }
-            }
-        }
-
-        function renderBillingView() {
-            const form = appState.billingForm;
-            let calculatedTotal = 0;
-            Object.entries(form.selectedItems).forEach(([itemId, qty]) => {
-                const cat = SERVICES_CATALOG.find(c => c.id === itemId);
-                if (cat && qty > 0) calculatedTotal += cat.price * qty;
-            });
-
-            return `
-                <div class="space-y-4 pb-8">
-                    <div class="flex items-center justify-between">
-                        <button onclick="navigateTo('home')" class="text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 bg-navy-800 px-3 py-2 rounded-xl border border-slate-700">
-                            <i class="fa-solid fa-arrow-left"></i> Accueil
-                        </button>
-                        <h2 class="text-sm font-extrabold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-cash-register text-electric-400"></i> Facturation & Prestations
-                        </h2>
-                    </div>
-
-                    <!-- FORMULAIRE SAISIE CLIENT & VÉHICULE -->
-                    <div class="bg-navy-800 border border-slate-700 rounded-3xl p-4 space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">1. Identification du Véhicule</h3>
-
-                        <div>
-                            <label class="text-[11px] text-slate-400 block mb-1">Plaque d'Immatriculation *</label>
-                            <input type="text" id="bill-plate" value="${form.plate}" oninput="handleBillingPlateInput(this.value)" placeholder="12456-124-15 ou GC-842-TR" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-white uppercase focus:border-electric-400 focus:outline-none">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Nom du client *</label>
-                                <input type="text" id="bill-owner" value="${form.ownerName}" oninput="appState.billingForm.ownerName = this.value" placeholder="Nom complet" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Téléphone *</label>
-                                <input type="tel" id="bill-phone" value="${form.phone}" oninput="appState.billingForm.phone = this.value" placeholder="0550..." class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Modèle / Marque *</label>
-                                <input type="text" id="bill-model" value="${form.model}" oninput="appState.billingForm.model = this.value" placeholder="Renault Clio..." class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Kilométrage actuel *</label>
-                                <input type="number" id="bill-mileage" value="${form.mileage}" oninput="appState.billingForm.mileage = parseInt(this.value)||0" placeholder="78500" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- CATALOGUE PRESTATIONS & ACCESSOIRES -->
-                    <div class="bg-navy-800 border border-slate-700 rounded-3xl p-4 space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">2. Sélection des Prestations & Articles</h3>
-
-                        <div class="space-y-2">
-                            ${SERVICES_CATALOG.map(s => {
-                                const qty = form.selectedItems[s.id] || 0;
-                                return `
-                                    <div class="bg-navy-950/80 border ${qty > 0 ? 'border-electric-500/50 bg-electric-500/5' : 'border-slate-800'} rounded-2xl p-2.5 flex items-center justify-between transition">
-                                        <div>
-                                            <p class="text-xs font-bold text-white">${s.name}</p>
-                                            <p class="text-[11px] font-mono text-electric-400">${formatDZD(s.price)}</p>
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            ${qty > 0 ? `
-                                                <button onclick="updateBillingItem('${s.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-800 text-white font-bold flex items-center justify-center">-</button>
-                                                <span class="text-xs font-mono font-bold w-5 text-center">${qty}</span>
-                                            ` : ''}
-                                            <button onclick="updateBillingItem('${s.id}', 1)" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold ${qty > 0 ? 'bg-electric-500 text-navy-950' : 'bg-slate-800 text-slate-300'}">
-                                                ${qty > 0 ? 'Ajouté' : '+ Ajouter'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-
-                    <!-- TOTAL & VALIDATION -->
-                    <div class="bg-navy-900 border-2 border-electric-500/50 rounded-3xl p-4 space-y-3 shadow-xl">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold uppercase text-slate-300">Montant Total :</span>
-                            <span class="text-xl font-extrabold text-electric-400">${formatDZD(calculatedTotal)}</span>
-                        </div>
-
-                        <button onclick="submitBillingForm()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-electric-500 to-blue-600 text-white font-bold text-sm shadow-lg shadow-electric-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-check-to-slot"></i> Valider et Imprimer le Reçu
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        function handleBillingPlateInput(val) {
-            appState.billingForm.plate = val.toUpperCase();
-            const compact = compactPlateKey(val);
-            const found = appState.vehicles.find(v => compactPlateKey(v.plate) === compact);
-            if (found) {
-                appState.billingForm.isNewClient = false;
-                appState.billingForm.vehicleId = found.id;
-                appState.billingForm.ownerName = found.ownerName;
-                appState.billingForm.phone = found.phone;
-                appState.billingForm.model = found.model;
-                appState.billingForm.mileage = found.mileage + 500;
-                renderCurrentView();
-            }
-        }
-
-        function updateBillingItem(itemId, delta) {
-            const current = appState.billingForm.selectedItems[itemId] || 0;
-            const next = current + delta;
-            if (next <= 0) {
-                delete appState.billingForm.selectedItems[itemId];
-            } else {
-                appState.billingForm.selectedItems[itemId] = next;
-            }
-            renderCurrentView();
-        }
-
-        function submitBillingForm() {
-            const form = appState.billingForm;
-            if (!form.plate || !form.ownerName || !form.phone || !form.model || !form.mileage) {
-                showToast('Veuillez remplir tous les champs obligatoires du véhicule.', 'fa-triangle-exclamation text-amber-400');
+            if(!found.active) {
+                errorDiv.textContent = "Ce compte a été suspendu par l'administrateur.";
+                errorDiv.classList.remove('hidden');
                 return;
             }
 
-            let itemsList = [];
-            let total = 0;
-            let oilChangeDone = false;
-            let latestOilKm = form.mileage;
-            let newFilters = { huile: null, air: null, habitacle: null, carburant: null };
-
-            Object.entries(form.selectedItems).forEach(([itemId, qty]) => {
-                const cat = SERVICES_CATALOG.find(c => c.id === itemId);
-                if (cat && qty > 0) {
-                    itemsList.push({ id: cat.id, name: cat.name, qty, price: cat.price });
-                    total += cat.price * qty;
-                    if (cat.isOilChange) oilChangeDone = true;
-                    if (cat.filterKey) {
-                        newFilters[cat.filterKey] = { date: new Date().toISOString().split('T')[0], km: form.mileage };
-                    }
-                }
-            });
-
-            if (itemsList.length === 0) {
-                showToast('Veuillez sélectionner au moins une prestation ou un accessoire.', 'fa-triangle-exclamation text-amber-400');
-                return;
-            }
-
-            const invoiceId = 'FAC-' + new Date().getFullYear() + '-' + Math.floor(100 + Math.random() * 900);
-            const newInvoice = {
-                id: invoiceId,
-                date: new Date().toISOString().split('T')[0],
-                mileage: form.mileage,
-                items: itemsList,
-                total
-            };
-
-            let targetVehicle = appState.vehicles.find(v => compactPlateKey(v.plate) === compactPlateKey(form.plate));
-
-            if (targetVehicle) {
-                targetVehicle.ownerName = form.ownerName.trim();
-                targetVehicle.phone = form.phone.trim();
-                targetVehicle.model = form.model.trim();
-                targetVehicle.mileage = Math.max(targetVehicle.mileage, form.mileage);
-                targetVehicle.inStation = false;
-                targetVehicle.stationStatus = 'Terminé';
-                targetVehicle.invoices.unshift(newInvoice);
-
-                if (oilChangeDone) {
-                    targetVehicle.maintenance.lastOilChangeDate = newInvoice.date;
-                    targetVehicle.maintenance.lastOilChangeKm = form.mileage;
-                    targetVehicle.maintenance.nextOilChangeKm = form.mileage + 10000;
-                }
-                Object.keys(newFilters).forEach(fk => {
-                    if (newFilters[fk]) targetVehicle.maintenance.filters[fk] = newFilters[fk];
-                });
-            } else {
-                targetVehicle = {
-                    id: 'v_' + Date.now(),
-                    plate: normalizePlate(form.plate),
-                    country: detectPlateCountry(form.plate, form.country),
-                    ownerName: form.ownerName.trim(),
-                    phone: form.phone.trim(),
-                    model: form.model.trim(),
-                    mileage: form.mileage,
-                    inStation: false,
-                    stationStatus: 'Terminé',
-                    maintenance: {
-                        lastOilChangeDate: oilChangeDone ? newInvoice.date : null,
-                        lastOilChangeKm: oilChangeDone ? form.mileage : 0,
-                        nextOilChangeKm: oilChangeDone ? form.mileage + 10000 : 0,
-                        filters: newFilters
-                    },
-                    invoices: [newInvoice]
-                };
-                appState.vehicles.unshift(targetVehicle);
-            }
-
-            saveState();
-            showToast('Facture enregistrée avec succès !');
-            openReceiptModal(targetVehicle.id, invoiceId);
-            navigateTo('home');
-        }
-
-        function renderHomeView() {
-            const todayStr = new Date().toISOString().split('T')[0];
-            let todayRevenue = 0;
-            let todayVehiclesCount = 0;
-
-            appState.vehicles.forEach(v => {
-                v.invoices.forEach(inv => {
-                    if (inv.date === todayStr) {
-                        todayRevenue += inv.total;
-                    }
-                });
-                if (v.inStation) todayVehiclesCount++;
-            });
-
-            const todayAppointments = appState.appointments.filter(a => a.date === todayStr && a.status === 'CONFIRME');
-            const q = appState.searchQuery.trim().toLowerCase();
-            const qCompact = compactPlateKey(q);
-            const searchResults = q ? appState.vehicles.filter(v => 
-                v.plate.toLowerCase().includes(q) ||
-                (qCompact && compactPlateKey(v.plate).toLowerCase().includes(qCompact)) ||
-                v.ownerName.toLowerCase().includes(q) ||
-                v.model.toLowerCase().includes(q)
-            ) : [];
-
-            const inStationVehicles = appState.vehicles.filter(v => v.inStation);
-
-            return `
-                <div class="space-y-5">
-                    ${hasPermission('MANAGE_USERS') ? `
-                        <div onclick="navigateTo('users')" class="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-3.5 py-2.5 flex items-center justify-between cursor-pointer active:scale-[0.99] transition">
-                            <div class="flex items-center gap-2.5">
-                                <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center text-sm">
-                                    <i class="fa-solid fa-user-shield"></i>
-                                </span>
-                                <div>
-                                    <p class="text-xs font-bold text-amber-200">Espace Administrateur</p>
-                                    <p class="text-[11px] text-amber-300/80">${appState.users.length} utilisateur(s) • Rôles & Sécurité</p>
-                                </div>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-amber-300 text-xs"></i>
-                        </div>
-                    ` : ''}
-
-                    <!-- BOUTON PROÉMINENT SCANNER OCR UNIVERSEL -->
-                    <button onclick="openScannerModal()" class="w-full relative overflow-hidden rounded-3xl bg-gradient-to-br from-electric-500 via-cyan-600 to-blue-700 p-5 text-left shadow-xl shadow-electric-500/20 border border-electric-400/30 active:scale-[0.98] transition group">
-                        <div class="relative z-10 flex items-center justify-between">
-                            <div>
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-navy-950/40 text-white text-[11px] font-semibold mb-2">
-                                    <i class="fa-solid fa-globe text-amber-300"></i> DZ • France • Allemagne • International
-                                </span>
-                                <h2 class="text-xl font-extrabold text-white tracking-tight">Scanner la Plaque</h2>
-                                <p class="text-xs text-cyan-100 mt-0.5">OCR Universel • Fiche client & historique auto</p>
-                            </div>
-                            <div class="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/25 group-hover:scale-105 transition">
-                                <i class="fa-solid fa-camera text-white text-2xl"></i>
-                            </div>
-                        </div>
-                        <div class="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-white/10 blur-xl"></div>
-                    </button>
-
-                    <!-- BARRE DE RECHERCHE INSTANTANÉE -->
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-magnifying-glass text-slate-400 text-sm"></i>
-                        </div>
-                        <input 
-                            type="text" 
-                            value="${appState.searchQuery}"
-                            oninput="handleSearchInput(this.value)"
-                            placeholder="Plaque (DZ, GC-842-TR...), Nom ou Modèle..." 
-                            class="w-full bg-navy-800 border border-slate-700/80 focus:border-electric-400 rounded-2xl py-3.5 pl-10 pr-10 text-sm text-white placeholder-slate-400 focus:outline-none transition shadow-inner"
-                        >
-                        ${appState.searchQuery ? `
-                            <button onclick="handleSearchInput('')" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white">
-                                <i class="fa-solid fa-circle-xmark"></i>
-                            </button>
-                        ` : ''}
-                    </div>
-
-                    ${q ? `
-                        <div class="bg-navy-800/90 border border-electric-500/30 rounded-2xl p-3 space-y-2.5">
-                            <div class="flex items-center justify-between px-1">
-                                <span class="text-xs font-semibold text-electric-400">Résultats (${searchResults.length})</span>
-                                <button onclick="navigateTo('new-visit', { prefillPlate: '${appState.searchQuery.toUpperCase()}' })" class="text-[11px] text-slate-300 underline">
-                                    + Inscrire ce véhicule
-                                </button>
-                            </div>
-                            ${searchResults.length === 0 ? `
-                                <div class="text-center py-4">
-                                    <p class="text-xs text-slate-400 mb-2.5">Aucun véhicule trouvé pour "${appState.searchQuery}"</p>
-                                    <button onclick="navigateTo('new-visit', { prefillPlate: '${appState.searchQuery.toUpperCase()}' })" class="bg-electric-500 text-navy-950 font-bold text-xs px-4 py-2 rounded-xl">
-                                        + Nouveau Client / Passage
-                                    </button>
-                                </div>
-                            ` : searchResults.map(v => renderVehicleCardCompact(v)).join('')}
-                        </div>
-                    ` : ''}
-
-                    <!-- RENDEZ-VOUS DU JOUR (WIDGET RAPIDE) -->
-                    <div class="bg-navy-800/80 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-electric-400 flex items-center gap-1.5">
-                                <i class="fa-solid fa-calendar-check"></i> Rendez-vous du jour (${todayAppointments.length})
-                            </h3>
-                            <button onclick="navigateTo('appointments')" class="text-xs text-electric-300 font-semibold underline">Gérer / Planifier</button>
-                        </div>
-                        ${todayAppointments.length === 0 ? `
-                            <p class="text-xs text-slate-400 text-center py-2">Aucun rendez-vous programmé aujourd'hui.</p>
-                        ` : `
-                            <div class="space-y-2">
-                                ${todayAppointments.map(app => `
-                                    <div class="bg-navy-950/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
-                                        <div>
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded">${app.time}</span>
-                                                <span class="text-xs font-bold text-white">${app.clientName}</span>
-                                            </div>
-                                            <p class="text-[11px] text-slate-400 mt-1">${app.service} • <span class="font-mono">${app.plate}</span></p>
-                                        </div>
-                                        <button onclick="convertAppointmentToVisit('${app.id}')" class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold px-2.5 py-1.5 rounded-lg">
-                                            Arrivé <i class="fa-solid fa-arrow-right ml-1"></i>
-                                        </button>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
-                    </div>
-
-                    <!-- STATISTIQUES DU JOUR -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-navy-800/70 border border-slate-800 rounded-2xl p-3.5">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-[11px] font-medium text-slate-400">Recette du jour</span>
-                                <span class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-xs">
-                                    <i class="fa-solid fa-coins"></i>
-                                </span>
-                            </div>
-                            ${hasPermission('VIEW_REVENUE') ? `
-                                <p class="text-lg font-extrabold text-white">${formatDZD(todayRevenue)}</p>
-                                <p class="text-[10px] text-emerald-400 mt-0.5"><i class="fa-solid fa-arrow-trend-up"></i> Caisse active</p>
-                            ` : `
-                                <p class="text-sm font-bold text-slate-400 mt-1"><i class="fa-solid fa-eye-slash mr-1"></i> Masqué</p>
-                                <p class="text-[10px] text-slate-500 mt-0.5">Accès Admin / Caissier</p>
-                            `}
-                        </div>
-
-                        <div class="bg-navy-800/70 border border-slate-800 rounded-2xl p-3.5">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-[11px] font-medium text-slate-400">Véhicules traités</span>
-                                <span class="w-7 h-7 rounded-lg bg-electric-500/15 text-electric-400 flex items-center justify-center text-xs">
-                                    <i class="fa-solid fa-car"></i>
-                                </span>
-                            </div>
-                            <p class="text-lg font-extrabold text-white">${todayVehiclesCount} <span class="text-xs font-normal text-slate-400">autos</span></p>
-                            <p class="text-[10px] text-electric-400 mt-0.5">${inStationVehicles.length} en baie</p>
-                        </div>
-                    </div>
-
-                    <!-- VÉHICULES ACTUELLEMENT EN STATION -->
-                    <div>
-                        <div class="flex items-center justify-between mb-2.5">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                                En station maintenant (${inStationVehicles.length})
-                            </h3>
-                        </div>
-                        <div class="space-y-2.5">
-                            ${inStationVehicles.length === 0 ? `
-                                <div class="bg-navy-800/40 border border-slate-800/80 rounded-2xl p-5 text-center text-xs text-slate-400">
-                                    Aucune voiture en cours de traitement.
-                                </div>
-                            ` : inStationVehicles.map(v => renderVehicleCardCompact(v, true)).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // ==========================================
-        // 6. NOUVEAU MODULE : PRISE DE RENDEZ-VOUS
-        // ==========================================
-        function renderAppointmentsView() {
-            const form = appState.appointmentForm;
-            const appointmentsList = [...appState.appointments].sort((a, b) => new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time));
-
-            return `
-                <div class="space-y-4 pb-6">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-base font-extrabold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-calendar-days text-electric-400"></i> Planification & Rendez-vous
-                        </h2>
-                    </div>
-
-                    <!-- FORMULAIRE NOUVEAU RENDEZ-VOUS -->
-                    <div class="bg-navy-800 border border-slate-700 rounded-3xl p-4 space-y-3">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Nouveau Rendez-vous Lavage / Vidange</h3>
-
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Nom du client *</label>
-                                <input type="text" id="app-client-name" value="${form.clientName}" oninput="appState.appointmentForm.clientName = this.value" placeholder="Nom complet" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Téléphone *</label>
-                                <input type="tel" id="app-phone" value="${form.phone}" oninput="appState.appointmentForm.phone = this.value" placeholder="0550..." class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Plaque d'immatriculation *</label>
-                                <input type="text" id="app-plate" value="${form.plate}" oninput="appState.appointmentForm.plate = this.value.toUpperCase()" placeholder="12456-124-15" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white uppercase focus:border-electric-400 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Modèle véhicule *</label>
-                                <input type="text" id="app-model" value="${form.model}" oninput="appState.appointmentForm.model = this.value" placeholder="Renault Clio..." class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="text-[11px] text-slate-400 block mb-1">Prestation demandée *</label>
-                            <select id="app-service" onchange="appState.appointmentForm.service = this.value" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                                ${SERVICES_CATALOG.map(s => `<option value="${s.name}" ${form.service === s.name ? 'selected' : ''}>${s.name} (${formatDZD(s.price)})</option>`).join('')}
-                            </select>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Date du RDV *</label>
-                                <input type="date" id="app-date" value="${form.date}" onchange="appState.appointmentForm.date = this.value" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Heure (Créneau) *</label>
-                                <select id="app-time" onchange="appState.appointmentForm.time = this.value" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:border-electric-400 focus:outline-none">
-                                    ${['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'].map(t => `<option value="${t}" ${form.time === t ? 'selected' : ''}>${t}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-
-                        <button onclick="saveNewAppointment()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-electric-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-electric-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-calendar-plus"></i> Enregistrer le Rendez-vous
-                        </button>
-                    </div>
-
-                    <!-- LISTE DES RENDEZ-VOUS ENREGISTRÉS -->
-                    <div class="space-y-2.5">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Planning des Rendez-vous (${appointmentsList.length})</h3>
-                        ${appointmentsList.length === 0 ? `
-                            <p class="text-center text-xs text-slate-400 py-6">Aucun rendez-vous planifié.</p>
-                        ` : appointmentsList.map(app => `
-                            <div class="bg-navy-800/80 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-lg">
-                                            <i class="fa-solid fa-clock mr-1"></i>${app.date} à ${app.time}
-                                        </span>
-                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${app.status === 'CONFIRME' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'}">
-                                            ${app.status}
-                                        </span>
-                                    </div>
-                                    <button onclick="deleteAppointment('${app.id}')" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </div>
-
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm font-bold text-white">${app.clientName} <span class="text-xs text-slate-400 font-normal">(${app.phone})</span></p>
-                                        <p class="text-xs text-slate-300 mt-0.5">${app.service} • <span class="font-mono text-electric-400">${app.plate}</span> (${app.model})</p>
-                                    </div>
-                                    ${app.status === 'CONFIRME' ? `
-                                        <button onclick="convertAppointmentToVisit('${app.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1 active:scale-95 transition shrink-0">
-                                            Arrivé <i class="fa-solid fa-arrow-right"></i>
-                                        </button>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function saveNewAppointment() {
-            const form = appState.appointmentForm;
-            if (!form.clientName || !form.phone || !form.plate || !form.model) {
-                showToast('Veuillez remplir tous les champs obligatoires du rendez-vous.', 'fa-triangle-exclamation text-amber-400');
-                return;
-            }
-
-            const newApp = {
-                id: 'RDV-' + Math.floor(100 + Math.random() * 900),
-                clientName: form.clientName.trim(),
-                phone: form.phone.trim(),
-                plate: normalizePlate(form.plate),
-                model: form.model.trim(),
-                service: form.service,
-                date: form.date,
-                time: form.time,
-                status: 'CONFIRME'
-            };
-
-            appState.appointments.unshift(newApp);
-            saveState();
-            showToast('Rendez-vous planifié avec succès !');
-            navigateTo('appointments');
-        }
-
-        function deleteAppointment(appId) {
-            appState.appointments = appState.appointments.filter(a => a.id !== appId);
-            saveState();
-            showToast('Rendez-vous supprimé.');
-            renderCurrentView();
-        }
-
-        function convertAppointmentToVisit(appId) {
-            const app = appState.appointments.find(a => a.id === appId);
-            if (!app) return;
-            app.status = 'ARRIVE';
-            saveState();
-            showToast(`Client ${app.clientName} enregistré en station.`);
-            navigateTo('new-visit', { prefillPlate: app.plate });
-        }
-
-        // ==========================================
-        // 9. SIMULATEUR CAMÉRA OCR PLAQUE UNIVERSELLE (Sans TN & MA)
-        // ==========================================
-        function openScannerModal() {
-            const modal = document.getElementById('scanner-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-
-            const samplePlates = [
-                { plate: '12456-124-15', country: 'DZ', label: '🇩🇿 Algérie' },
-                { plate: 'GC-842-TR', country: 'FR', label: '🇫🇷 France' },
-                { plate: 'M-AB 4512', country: 'DE', label: '🇩🇪 Allemagne' },
-                { plate: 'EF-519-KL', country: 'FR', label: '🇫🇷 Europe' }
-            ];
-
-            const presetsContainer = document.getElementById('scan-presets');
-            presetsContainer.innerHTML = samplePlates.map(p => `
-                <button onclick="setSimulatedPlate('${p.plate}', '${p.country}')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold border transition ${appState.simulatedScanPlate === p.plate ? 'bg-electric-500 text-navy-950 border-electric-400' : 'bg-slate-800 text-slate-300 border-slate-700'}">
-                    ${p.plate} <span class="font-sans opacity-80">(${p.label})</span>
-                </button>
-            `).join('');
-
-            document.getElementById('scanner-preview-plate').innerHTML = renderLicensePlateBadge(appState.simulatedScanPlate, appState.simulatedScanCountry, 'lg');
-        }
-
-        function setSimulatedPlate(plate, country = 'AUTO') {
-            appState.simulatedScanPlate = plate;
-            appState.simulatedScanCountry = country;
-            document.getElementById('scanner-preview-plate').innerHTML = renderLicensePlateBadge(plate, country, 'lg');
-            openScannerModal();
-        }
-
-        function closeScannerModal() {
-            const modal = document.getElementById('scanner-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-
-        function triggerOcrCapture() {
-            const statusEl = document.getElementById('scanner-status-text');
-            statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Analyse OCR internationale...';
-            
-            setTimeout(() => {
-                const scannedPlate = normalizePlate(appState.simulatedScanPlate);
-                const scannedCompact = compactPlateKey(scannedPlate);
-                const detectedCountry = detectPlateCountry(scannedPlate, appState.simulatedScanCountry);
-                const countryLabel = (COUNTRY_META[detectedCountry] || COUNTRY_META.INT).label;
-
-                closeScannerModal();
-                statusEl.textContent = 'Détection multi-pays active...';
-
-                // Rechercher si la plaque existe dans la base (tous formats confondus)
-                const existingVehicle = appState.vehicles.find(v => compactPlateKey(v.plate) === scannedCompact);
-
-                if (existingVehicle) {
-                    showToast(`Plaque ${countryLabel} reconnue : ${existingVehicle.model}`);
-                    navigateTo('vehicle-detail', existingVehicle.id);
-                } else {
-                    showToast(`Nouvelle plaque (${countryLabel}) : ${scannedPlate}`, 'fa-user-plus text-amber-400');
-                    navigateTo('new-visit', { prefillPlate: scannedPlate, prefillCountry: detectedCountry });
-                }
-            }, 650);
-        }
-
-        // ==========================================
-        // 10. MODAL FACTURE / REÇU & PARTAGE WHATSAPP
-        // ==========================================
-        function openReceiptModal(vehicleId, invoiceId) {
-            const v = appState.vehicles.find(item => item.id === vehicleId);
-            if (!v) return;
-            const inv = v.invoices.find(i => i.id === invoiceId);
-            if (!inv) return;
-
-            appState.activeReceipt = { vehicle: v, invoice: inv };
-            const countryInfo = COUNTRY_META[detectPlateCountry(v.plate, v.country)] || COUNTRY_META.INT;
-
-            const bodyEl = document.getElementById('receipt-body');
-            bodyEl.innerHTML = `
-                <div class="flex justify-between text-[11px] text-slate-600">
-                    <span><strong>N° Facture:</strong> ${inv.id}</span>
-                    <span><strong>Date:</strong> ${formatDateFR(inv.date)}</span>
-                </div>
-                <div class="bg-slate-100 p-2.5 rounded-xl space-y-1">
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Client :</span>
-                        <span class="font-bold text-slate-900">${v.ownerName}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Véhicule :</span>
-                        <span class="font-bold text-slate-900">${v.model}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Matricule (${countryInfo.code}) :</span>
-                        <span class="font-mono font-bold text-slate-900">${v.plate}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Kilométrage :</span>
-                        <span class="font-mono font-semibold text-slate-800">${inv.mileage.toLocaleString('fr-FR')} km</span>
-                    </div>
-                </div>
-
-                <div>
-                    <p class="font-bold text-slate-700 border-b border-slate-200 pb-1 mb-2">Détail des prestations & articles :</p>
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="text-[10px] text-slate-400 uppercase">
-                                <th class="pb-1">Désignation</th>
-                                <th class="pb-1 text-center">Qté</th>
-                                <th class="pb-1 text-right">Montant</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            ${inv.items.map(item => `
-                                <tr>
-                                    <td class="py-1.5 font-medium text-slate-800">${item.name}</td>
-                                    <td class="py-1.5 text-center text-slate-600">${item.qty}</td>
-                                    <td class="py-1.5 text-right font-mono font-semibold text-slate-900">${formatDZD(item.price * item.qty)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between">
-                    <span class="font-bold text-xs uppercase">Total Net à Payer</span>
-                    <span class="text-base font-extrabold text-electric-400">${formatDZD(inv.total)}</span>
-                </div>
-
-                <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-900">
-                    <p class="font-bold"><i class="fa-solid fa-oil-can mr-1"></i> Prochaine vidange recommandée :</p>
-                    <p class="font-mono font-bold text-xs mt-0.5">${v.maintenance.nextOilChangeKm.toLocaleString('fr-FR')} km</p>
-                </div>
-            `;
-
-            const modal = document.getElementById('receipt-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function closeReceiptModal() {
-            const modal = document.getElementById('receipt-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-
-        function shareReceiptWhatsApp() {
-            if (!appState.activeReceipt) return;
-            const { vehicle, invoice } = appState.activeReceipt;
-            
-            const lines = [
-                `*AUTOCLEAN PRO - Reçu de Passage*`,
-                `Facture : ${invoice.id} (${formatDateFR(invoice.date)})`,
-                `Client : ${vehicle.ownerName}`,
-                `Véhicule : ${vehicle.model} [${vehicle.plate}]`,
-                `Kilométrage : ${invoice.mileage.toLocaleString('fr-FR')} km`,
-                `------------------------`,
-                ...invoice.items.map(i => `• ${i.qty}x ${i.name} : ${formatDZD(i.price * i.qty)}`),
-                `------------------------`,
-                `*TOTAL : ${formatDZD(invoice.total)}*`,
-                `Prochaine vidange : ${vehicle.maintenance.nextOilChangeKm.toLocaleString('fr-FR')} km`,
-                `Merci de votre visite !`
-            ];
-
-            const text = encodeURIComponent(lines.join('\n'));
-            let cleanPhone = vehicle.phone.replace(/[^\d+]/g, '');
-            if (cleanPhone.startsWith('+')) {
-                cleanPhone = cleanPhone.substring(1);
-            } else if (cleanPhone.startsWith('00')) {
-                cleanPhone = cleanPhone.substring(2);
-            } else if (cleanPhone.startsWith('0')) {
-                cleanPhone = '213' + cleanPhone.substring(1);
-            }
-            window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
-        }
-
-        // ==========================================
-        // 11. AUTHENTIFICATION & GESTION UTILISATEURS (ADMIN)
-        // ==========================================
-        function updateAuthUI() {
-            const loginScreen = document.getElementById('login-screen');
-            const badgeEl = document.getElementById('header-user-badge');
-            const teamBtn = document.getElementById('header-team-btn');
-
-            if (!appState.currentUser) {
-                loginScreen.classList.remove('hidden');
-                loginScreen.classList.add('flex');
-                renderDemoLoginButtons();
-                return;
-            }
-
-            loginScreen.classList.add('hidden');
-            loginScreen.classList.remove('flex');
-
-            const roleInfo = ROLES_CONFIG[appState.currentUser.role] || ROLES_CONFIG.LAVAGISTE;
-            badgeEl.textContent = `${appState.currentUser.name.split(' ')[0]} (${roleInfo.label})`;
-
-            if (hasPermission('MANAGE_USERS')) {
-                teamBtn.classList.remove('hidden');
-                teamBtn.classList.add('flex');
-            } else {
-                teamBtn.classList.add('hidden');
-                teamBtn.classList.remove('flex');
-            }
-        }
-
-        // ==========================================
-        // 12. PORTAIL CLIENT EXTERNE (PRISE DE RDV)
-        // ==========================================
-        function openClientPortal() {
-            const modal = document.getElementById('client-portal-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            // Mettre la date par défaut à aujourd'hui
-            document.getElementById('cp-date').value = new Date().toISOString().split('T')[0];
-        }
-
-        function closeClientPortal() {
-            const modal = document.getElementById('client-portal-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-
-        function submitClientPortalAppointment() {
-            const name = (document.getElementById('cp-name').value || '').trim();
-            const phone = (document.getElementById('cp-phone').value || '').trim();
-            const plate = (document.getElementById('cp-plate').value || '').trim().toUpperCase();
-            const model = (document.getElementById('cp-model').value || '').trim();
-            const service = document.getElementById('cp-service').value;
-            const date = document.getElementById('cp-date').value;
-            const time = document.getElementById('cp-time').value;
-
-            if (!name || !phone || !plate || !model || !date) {
-                showToast('Veuillez remplir tous les champs du formulaire.', 'fa-triangle-exclamation text-amber-400');
-                return;
-            }
-
-            const newApp = {
-                id: 'RDV-WEB-' + Math.floor(100 + Math.random() * 900),
-                clientName: name,
-                phone: phone,
-                plate: normalizePlate(plate),
-                model: model,
-                service: service,
-                date: date,
-                time: time,
-                status: 'CONFIRME'
-            };
-
-            appState.appointments.unshift(newApp);
-            saveState();
-            closeClientPortal();
-            showToast('Votre rendez-vous a bien été enregistré ! À bientôt en station.');
-        }
-
-        function renderDemoLoginButtons() {
-            const container = document.getElementById('demo-accounts-list');
-            if (!container) return;
-            container.innerHTML = appState.users.filter(u => u.active).map(u => {
-                const r = ROLES_CONFIG[u.role] || ROLES_CONFIG.LAVAGISTE;
-                return `
-                    <button onclick="quickLogin('${u.username}', '${u.pin}')" class="w-full bg-navy-950/90 hover:bg-slate-800 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between text-left transition active:scale-[0.99]">
-                        <div>
-                            <span class="text-xs font-bold text-white block">${u.name}</span>
-                            <span class="text-[10px] font-mono text-slate-400">ID: ${u.username} • PIN: ${u.pin}</span>
-                        </div>
-                        <span class="px-2 py-0.5 rounded-full border text-[10px] font-semibold ${r.badgeClass}">
-                            <i class="fa-solid ${r.icon} mr-1"></i>${r.label}
-                        </span>
-                    </button>
-                `;
-            }).join('');
-        }
-
-        function quickLogin(username, pin) {
-            document.getElementById('login-username').value = username;
-            document.getElementById('login-pin').value = pin;
-            handleLoginSubmit();
-        }
-
-        function handleLoginSubmit() {
-            const username = (document.getElementById('login-username').value || '').trim().toLowerCase();
-            const pin = (document.getElementById('login-pin').value || '').trim();
-
-            if (!username || !pin) {
-                showToast('Entrez votre identifiant et votre code PIN.', 'fa-triangle-exclamation text-amber-400');
-                return;
-            }
-
-            const matchedUser = appState.users.find(u => u.username.toLowerCase() === username && u.pin === pin);
-            if (!matchedUser) {
-                showToast('Identifiant ou code PIN incorrect.', 'fa-circle-xmark text-rose-400');
-                return;
-            }
-            if (!matchedUser.active) {
-                showToast('Ce compte est suspendu par l’administrateur.', 'fa-ban text-rose-400');
-                return;
-            }
-
-            appState.currentUser = matchedUser;
-            sessionStorage.setItem('autoclean_pro_session', JSON.stringify(matchedUser));
-            document.getElementById('login-pin').value = '';
-            updateAuthUI();
-            navigateTo('home');
-            showToast(`Bienvenue ${matchedUser.name} !`);
+            appState.currentUser = found;
+            appState.currentView = 'home';
+            renderApp();
         }
 
         function logoutUser() {
             appState.currentUser = null;
-            sessionStorage.removeItem('autoclean_pro_session');
-            updateAuthUI();
-            showToast('Session verrouillée.');
+            appState.currentView = 'login';
+            renderApp();
         }
 
-        function renderUsersManagementView() {
-            if (!hasPermission('MANAGE_USERS')) {
-                return `<p class="text-center text-rose-400 py-10 text-xs font-bold">Accès refusé.</p>`;
+        // --- MOTEUR DE RENDU PRINCIPAL ---
+        function renderApp() {
+            const container = document.getElementById('app');
+            container.innerHTML = '';
+
+            if(!appState.currentUser) {
+                container.innerHTML = renderLoginView();
+                return;
             }
 
+            let html = '';
+            html += renderHeader();
+            html += `<main class="flex-1 overflow-y-auto pb-24 px-4 pt-4">`;
+
+            if(appState.currentView === 'home') html += renderHomeView();
+            else if(appState.currentView === 'clients') html += renderClientsView();
+            else if(appState.currentView === 'billing') html += renderBillingView();
+            else if(appState.currentView === 'journal') html += renderJournalView();
+            else if(appState.currentView === 'admin') html += renderAdminView();
+            else if(appState.currentView === 'vehicle_detail') html += renderVehicleDetailView();
+
+            html += `</main>`;
+            html += renderNav();
+            container.innerHTML = html;
+        }
+
+        // --- VUE LOGIN ---
+        function renderLoginView() {
             return `
-                <div class="space-y-4 pb-6">
-                    <div class="flex items-center justify-between">
-                        <button onclick="navigateTo('home')" class="text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 bg-navy-800 px-3 py-2 rounded-xl border border-slate-700">
-                            <i class="fa-solid fa-arrow-left"></i> Accueil
-                        </button>
-                        <span class="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-bold">
-                            <i class="fa-solid fa-crown mr-1"></i> Panneau Admin
-                        </span>
+                <div class="flex-1 flex flex-col justify-center px-6 py-12 bg-slate-950">
+                    <div class="text-center mb-8">
+                        <div class="w-20 h-20 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-blue-500/20 mb-4">
+                            <i class="fa-solid fa-car-wash text-3xl text-white"></i>
+                        </div>
+                        <h1 class="text-2xl font-bold text-white tracking-tight">AZ-AutoClean</h1>
+                        <p class="text-xs text-slate-400 mt-1">Gestion Station de Lavage & Entretien</p>
                     </div>
 
-                    <!-- FORMULAIRE CRÉATION NOUVEL UTILISATEUR -->
-                    <div class="bg-navy-800/90 border border-slate-700 rounded-3xl p-4 space-y-3">
-                        <h2 class="text-sm font-extrabold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-user-plus text-electric-400"></i> Créer un Utilisateur & Rôle
-                        </h2>
+                    <form onsubmit="loginUser(event)" class="space-y-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 backdrop-blur">
+                        <div id="login-error" class="hidden p-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl text-center">
+                            Identifiant ou code PIN incorrect.
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Identifiant</label>
+                            <input type="text" id="login-user" required placeholder="Ex: admin" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Code PIN</label>
+                            <input type="password" id="login-pin" required placeholder="••••" maxlength="6" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 tracking-widest">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-600/30 text-sm">
+                            Se connecter
+                        </button>
+                    </form>
+                </div>
+            `;
+        }
 
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Nom complet *</label>
-                                <input id="new-user-name" type="text" placeholder="Ex: Walid K." class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:border-electric-400 focus:outline-none">
+        // --- EN-TÊTE & NAVIGATION ---
+        function renderHeader() {
+            const roleInfo = ROLES_CONFIG[appState.currentUser.role];
+            return `
+                <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold">
+                            ${appState.currentUser.name.charAt(0)}
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-semibold text-white leading-tight">${appState.currentUser.name}</h2>
+                            <span class="inline-block text-[10px] px-2 py-0.5 rounded-full border mt-0.5 ${roleInfo.badge}">${roleInfo.label}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${appState.currentUser.role === 'admin' ? `
+                            <button onclick="switchView('admin')" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400 hover:bg-slate-700 transition" title="Administration">
+                                <i class="fa-solid fa-shield-halved text-sm"></i>
+                            </button>
+                        ` : ''}
+                        <button onclick="logoutUser()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-rose-400 hover:bg-slate-700 transition" title="Déconnexion">
+                            <i class="fa-solid fa-power-off text-sm"></i>
+                        </button>
+                    </div>
+                </header>
+            `;
+        }
+
+        function renderNav() {
+            const v = appState.currentView;
+            return `
+                <nav class="absolute bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 px-2 py-2 flex justify-around items-center z-30">
+                    <button onclick="switchView('home')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='home'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-house text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Accueil</span>
+                    </button>
+                    <button onclick="switchView('clients')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='clients'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-users text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Clients</span>
+                    </button>
+                    <button onclick="switchView('billing')" class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 border-4 border-slate-950 transition hover:bg-blue-500">
+                        <i class="fa-solid fa-cash-register text-lg"></i>
+                    </button>
+                    <button onclick="switchView('journal')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='journal'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-book text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Journal</span>
+                    </button>
+                    ${appState.currentUser.role === 'admin' ? `
+                    <button onclick="switchView('admin')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='admin'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-gear text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Admin</span>
+                    </button>` : ''}
+                </nav>
+            `;
+        }
+
+        function switchView(viewName) {
+            appState.currentView = viewName;
+            renderApp();
+        }
+
+        // --- VUE ACCUEIL ---
+        function renderHomeView() {
+            return `
+                <div class="space-y-6">
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                        <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
+                            <i class="fa-solid fa-magnifying-glass text-blue-500 mr-2"></i> Recherche & Entrée Véhicule
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="relative">
+                                <input type="text" id="search-plate-input" oninput="filterVehicles(this.value)" placeholder="Entrer plaque, nom ou modèle..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 uppercase">
+                                <i class="fa-solid fa-car absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
                             </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Identifiant login *</label>
-                                <input id="new-user-username" type="text" placeholder="Ex: walid" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-mono text-white lowercase focus:border-electric-400 focus:outline-none">
+                            <div class="flex space-x-2">
+                                <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
+                                    <i class="fa-solid fa-camera mr-2"></i> Scanner Plaque
+                                </button>
+                                <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
+                                    <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
+                                </button>
                             </div>
                         </div>
-
-                        <div class="grid grid-cols-2 gap-2.5">
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Code PIN (4 chiffres) *</label>
-                                <input id="new-user-pin" type="text" inputmode="numeric" maxlength="6" placeholder="Ex: 4589" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-mono text-white focus:border-electric-400 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">Rôle attribué *</label>
-                                <select id="new-user-role" class="w-full bg-navy-950 border border-slate-700 rounded-xl px-2.5 py-2.5 text-xs text-white focus:border-electric-400 focus:outline-none">
-                                    <option value="LAVAGISTE">Lavagiste / Mécanicien</option>
-                                    <option value="CAISSIER">Caissier / Réception</option>
-                                    <option value="ADMIN">Administrateur</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <button onclick="createNewUser()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-electric-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-electric-500/20 active:scale-[0.98] transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-plus"></i> Ajouter à l'équipe
-                        </button>
                     </div>
 
-                    <!-- LÉGENDE DES PERMISSIONS PAR RÔLE -->
-                    <div class="bg-navy-950/70 border border-slate-800 rounded-2xl p-3 space-y-2">
-                        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Droits par rôle :</p>
-                        ${Object.values(ROLES_CONFIG).map(r => `
-                            <div class="flex items-start gap-2 text-[11px]">
-                                <span class="px-2 py-0.5 rounded-full border font-semibold shrink-0 ${r.badgeClass}">
-                                    <i class="fa-solid ${r.icon} mr-1"></i>${r.label}
-                                </span>
-                                <span class="text-slate-400 leading-snug">${r.description}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-
-                    <!-- LISTE DES UTILISATEURS EXISTANTS -->
-                    <div class="space-y-2.5">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Comptes de la station (${appState.users.length})</h3>
-                        ${appState.users.map(u => {
-                            const r = ROLES_CONFIG[u.role] || ROLES_CONFIG.LAVAGISTE;
-                            const isSelf = appState.currentUser && appState.currentUser.id === u.id;
-                            return `
-                                <div class="bg-navy-800/80 border ${u.active ? 'border-slate-800' : 'border-rose-500/30 opacity-65'} rounded-2xl p-3.5 space-y-2.5">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <div class="flex items-center gap-2">
-                                                <p class="text-sm font-bold text-white">${u.name}</p>
-                                                ${isSelf ? '<span class="text-[10px] bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded">Vous</span>' : ''}
-                                            </div>
-                                            <p class="text-[11px] font-mono text-slate-400 mt-0.5">ID: <span class="text-slate-200">${u.username}</span> • PIN: <span class="text-electric-400">${u.pin}</span></p>
-                                        </div>
-                                        <span class="px-2.5 py-1 rounded-full border text-[10px] font-bold ${r.badgeClass}">
-                                            <i class="fa-solid ${r.icon} mr-1"></i>${r.label}
-                                        </span>
-                                    </div>
-
-                                    ${!isSelf ? `
-                                        <div class="flex items-center justify-between pt-2 border-t border-slate-700/60 gap-2">
-                                            <select onchange="changeUserRole('${u.id}', this.value)" class="bg-navy-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none">
-                                                <option value="LAVAGISTE" ${u.role === 'LAVAGISTE' ? 'selected' : ''}>Rôle : Lavagiste</option>
-                                                <option value="CAISSIER" ${u.role === 'CAISSIER' ? 'selected' : ''}>Rôle : Caissier</option>
-                                                <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>Rôle : Admin</option>
-                                            </select>
-
-                                            <div class="flex items-center gap-1.5">
-                                                <button onclick="toggleUserActive('${u.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border ${u.active ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'}">
-                                                    ${u.active ? 'Suspendre' : 'Activer'}
-                                                </button>
-                                                <button onclick="deleteUserAccount('${u.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `;
-                        }).join('')}
+                    <div id="search-results-container" class="space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Véhicules Récents</h4>
+                        ${renderVehicleList(appState.vehicles)}
                     </div>
                 </div>
             `;
         }
 
-        function createNewUser() {
-            const name = (document.getElementById('new-user-name').value || '').trim();
-            const username = (document.getElementById('new-user-username').value || '').trim().toLowerCase().replace(/\s+/g, '');
-            const pin = (document.getElementById('new-user-pin').value || '').trim();
-            const role = document.getElementById('new-user-role').value;
-
-            if (!name || !username || !pin) {
-                showToast('Remplissez le nom, l’identifiant et le code PIN.', 'fa-triangle-exclamation text-amber-400');
-                return;
+        function renderVehicleList(vehiclesList) {
+            if(vehiclesList.length === 0) {
+                return `
+                    <div class="text-center py-10 bg-slate-900/40 rounded-2xl border border-slate-800">
+                        <i class="fa-solid fa-car-side text-3xl text-slate-600 mb-2"></i>
+                        <p class="text-sm text-slate-400">Aucun véhicule trouvé.</p>
+                    </div>
+                `;
             }
-            if (appState.users.some(u => u.username.toLowerCase() === username)) {
-                showToast('Cet identifiant existe déjà.', 'fa-circle-xmark text-rose-400');
-                return;
-            }
+            return vehiclesList.map(v => {
+                const client = appState.clients.find(c => c.id === v.clientId) || { name: 'Client Inconnu', phone: '' };
+                const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+                return `
+                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
+                                <span class="text-base">${countryMeta.flag}</span>
+                                <span class="font-mono font-bold text-white text-sm tracking-wide">${v.plate}</span>
+                            </div>
+                            <span class="text-xs text-blue-400 font-medium">${v.mileage.toLocaleString()} km</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">${v.model}</h4>
+                                <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1"></i> ${client.name} (${client.phone})</p>
+                            </div>
+                            <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">Historique <i class="fa-solid fa-chevron-right ml-1"></i></span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
 
-            appState.users.push({
-                id: 'u_' + Date.now(),
-                name,
-                username,
-                pin,
-                role,
-                active: true
+        function filterVehicles(query) {
+            const q = query.toLowerCase();
+            const filtered = appState.vehicles.filter(v => {
+                const client = appState.clients.find(c => c.id === v.clientId) || {};
+                return v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q) || (client.name && client.name.toLowerCase().includes(q));
             });
-            saveUsers();
-            showToast(`Compte ${name} (${ROLES_CONFIG[role].label}) créé !`);
-            renderCurrentView();
+            document.getElementById('search-results-container').innerHTML = `
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche</h4>
+                ${renderVehicleList(filtered)}
+            `;
         }
 
-        function changeUserRole(userId, newRole) {
-            const user = appState.users.find(u => u.id === userId);
-            if (!user) return;
-            user.role = newRole;
-            saveUsers();
-            showToast(`Rôle de ${user.name} mis à jour : ${ROLES_CONFIG[newRole].label}`);
-            renderCurrentView();
+        // --- SCANNER DE PLAQUE (CAMÉRA + OCR MOBILE ROBUSTE) ---
+        let scannerStream = null;
+        let tesseractWorkerPromise = null;
+
+        function loadTesseract() {
+            if (window.Tesseract) return Promise.resolve(window.Tesseract);
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                s.onload = () => resolve(window.Tesseract);
+                s.onerror = () => reject(new Error("Impossible de charger le moteur OCR."));
+                document.head.appendChild(s);
+            });
         }
 
-        function toggleUserActive(userId) {
-            const user = appState.users.find(u => u.id === userId);
-            if (!user) return;
-            user.active = !user.active;
-            saveUsers();
-            showToast(user.active ? `Compte ${user.name} activé` : `Compte ${user.name} suspendu`);
-            renderCurrentView();
+        function getOcrWorker() {
+            if (!tesseractWorkerPromise) {
+                tesseractWorkerPromise = loadTesseract().then(async T => {
+                    const worker = await T.createWorker('eng');
+                    await worker.setParameters({
+                        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ- ',
+                        tessedit_pageseg_mode: '7'
+                    });
+                    return worker;
+                }).catch(err => { tesseractWorkerPromise = null; throw err; });
+            }
+            return tesseractWorkerPromise;
         }
 
-        function deleteUserAccount(userId) {
-            appState.users = appState.users.filter(u => u.id !== userId);
-            saveUsers();
-            showToast('Utilisateur supprimé.');
-            renderCurrentView();
+        function setScanStatus(msg, isError) {
+            const el = document.getElementById('scan-status');
+            if (!el) return;
+            el.textContent = msg;
+            el.className = 'text-xs text-center min-h-[1rem] ' + (isError ? 'text-red-400' : 'text-slate-400');
         }
 
-        // Initialisation au chargement
-        window.addEventListener('DOMContentLoaded', () => {
-            loadState();
-            updateAuthUI();
-            renderCurrentView();
-        });
+        async function openPlateScanner() {
+            closePlateScanner();
+            const modal = document.createElement('div');
+            modal.id = 'scanner-modal';
+            modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-camera text-blue-500 mr-2"></i>Scanner une plaque</h3>
+                        <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    
+                    <div id="scan-video-wrap" class="relative bg-black rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center">
+                        <video id="scan-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                        <div class="absolute left-[8%] right-[8%] top-[38%] h-[24%] border-2 border-blue-400 rounded-lg pointer-events-none"></div>
+                    </div>
+
+                    <p id="scan-status" class="text-xs text-center text-slate-400 min-h-[1rem]">Prêt à scanner...</p>
+                    
+                    <div class="space-y-2">
+                        <!-- Bouton natif photo direct pour contourner les restrictions mobiles -->
+                        <label class="w-full bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-lg shadow-blue-600/30">
+                            <i class="fa-solid fa-camera-retro mr-2"></i> Prendre une photo de la plaque
+                            <input type="file" accept="image/*" capture="environment" class="hidden" onchange="scanFromFile(this)">
+                        </label>
+                        <button id="scan-capture-btn" onclick="captureFromVideo()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium">
+                            <i class="fa-solid fa-circle-dot mr-2"></i> Capturer le flux vidéo
+                        </button>
+                    </div>
+
+                    <div class="space-y-2 pt-1 border-t border-slate-800">
+                        <label class="text-xs text-slate-400">Plaque détectée / modifiable</label>
+                        <input id="scan-plate-result" type="text" placeholder="ex: 12456-124-16" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white font-mono uppercase focus:outline-none focus:border-blue-500">
+                        <button onclick="confirmScannedPlate()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-2.5 rounded-xl font-medium">
+                            <i class="fa-solid fa-check mr-2"></i> Valider et ouvrir le véhicule
+                        </button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+
+            getOcrWorker().catch(() => {});
+
+            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setScanStatus("Flux direct non supporté : utilisez le bouton photo ci-dessus.", true);
+                return;
+            }
+            try {
+                scannerStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                const video = document.getElementById('scan-video');
+                if (!video) { stopScannerStream(); return; }
+                video.srcObject = scannerStream;
+                await video.play().catch(() => {});
+                setScanStatus("Cadrez la plaque ou prenez une photo directe.");
+            } catch (err) {
+                setScanStatus("Caméra en direct indisponible. Utilisez le bouton photo.", true);
+            }
+        }
+
+        function stopScannerStream() {
+            if (scannerStream) {
+                scannerStream.getTracks().forEach(t => t.stop());
+                scannerStream = null;
+            }
+        }
+
+        function closePlateScanner() {
+            stopScannerStream();
+            const m = document.getElementById('scanner-modal');
+            if (m) m.remove();
+        }
+
+        function preprocessForOcr(source, sw, sh, crop) {
+            const sx = crop ? sw * 0.08 : 0, sy = crop ? sh * 0.38 : 0;
+            const cw = crop ? sw * 0.84 : sw, ch = crop ? sh * 0.24 : sh;
+            const scale = Math.min(1, 1600 / cw) * (cw < 800 ? 2 : 1);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(cw * scale);
+            canvas.height = Math.round(ch * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(source, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = img.data;
+            for (let i = 0; i < d.length; i += 4) {
+                let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
+                d[i] = d[i + 1] = d[i + 2] = g;
+            }
+            ctx.putImageData(img, 0, 0);
+            return canvas;
+        }
+
+        function captureFromVideo() {
+            const video = document.getElementById('scan-video');
+            if (!video || !video.videoWidth) { setScanStatus("La caméra n'est pas prête.", true); return; }
+            const vw = video.videoWidth, vh = video.videoHeight;
+            const ew = video.clientWidth, eh = video.clientHeight;
+            const s = Math.max(ew / vw, eh / vh);
+            const visW = ew / s, visH = eh / s;
+            const offX = (vw - visW) / 2, offY = (vh - visH) / 2;
+            const tmp = document.createElement('canvas');
+            tmp.width = Math.round(visW); tmp.height = Math.round(visH);
+            tmp.getContext('2d').drawImage(video, offX, offY, visW, visH, 0, 0, tmp.width, tmp.height);
+            runOcr([preprocessForOcr(tmp, tmp.width, tmp.height, true)]);
+        }
+
+        function scanFromFile(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const w = img.naturalWidth, h = img.naturalHeight;
+                runOcr([preprocessForOcr(img, w, h, true), preprocessForOcr(img, w, h, false)]);
+            };
+            img.onerror = () => setScanStatus("Image illisible.", true);
+            img.src = url;
+            input.value = '';
+        }
+
+        function extractPlate(text) {
+            const t = (text || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ');
+            const compact = t.replace(/\s+/g, '');
+            let m = compact.match(/(\d{5,6})(\d{3})(\d{2})/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+            m = compact.match(/([A-Z]{2})(\d{3})([A-Z]{2})/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+            const tokens = t.trim().split(/\s+/).filter(x => /\d/.test(x) && x.length >= 4);
+            if (tokens.length) return tokens.sort((a, b) => b.length - a.length)[0];
+            return compact.length >= 4 ? compact : '';
+        }
+
+        async function runOcr(canvases) {
+            setScanStatus("Analyse de la plaque en cours...");
+            try {
+                const worker = await getOcrWorker();
+                let plate = '';
+                for (const c of canvases) {
+                    const { data } = await worker.recognize(c);
+                    plate = extractPlate(data.text);
+                    if (plate) break;
+                }
+                const out = document.getElementById('scan-plate-result');
+                if (!out) return;
+                if (plate) {
+                    out.value = plate;
+                    setScanStatus("Plaque lue avec succès ! Vérifiez puis validez.");
+                } else {
+                    setScanStatus("Plaque non reconnue clairement. Saisissez-la manuellement ci-dessous.", true);
+                    out.focus();
+                }
+            } catch (err) {
+                setScanStatus("Erreur d'analyse OCR.", true);
+            }
+        }
+
+        function confirmScannedPlate() {
+            const input = document.getElementById('scan-plate-result');
+            const plate = (input ? input.value : '').trim().toUpperCase();
+            if (!plate) { setScanStatus("Veuillez entrer ou scanner une plaque.", true); return; }
+            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            closePlateScanner();
+
+            const existing = appState.vehicles.find(v => norm(v.plate) === norm(plate));
+            if (existing) { openVehicleDetail(existing.id); return; }
+
+            if (!confirm(`Plaque ${plate} inconnue. Enregistrer un nouveau véhicule ?`)) return;
+            const name = prompt("Nom complet du client :", "") || "Client " + plate;
+            const phone = prompt("Numéro de téléphone :", "+213 ") || "";
+            const model = prompt("Modèle du véhicule :", "") || "Non renseigné";
+            const country = /^\d{5,6}-\d{3}-\d{2}$/.test(plate) ? 'DZ' : (/^[A-Z]{2}-\d{3}-[A-Z]{2}$/.test(plate) ? 'EU' : 'OTHER');
+
+            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 0, country });
+            saveState();
+            openVehicleDetail(newVehId);
+        }
+
+        // --- VUE DETAIL VEHICULE & HISTORIQUE ---
+        let selectedVehicleId = null;
+        function openVehicleDetail(vehId) {
+            selectedVehicleId = vehId;
+            appState.currentView = 'vehicle_detail';
+            renderApp();
+        }
+
+        function renderVehicleDetailView() {
+            const v = appState.vehicles.find(item => item.id === selectedVehicleId);
+            if(!v) return `<p class="text-center text-slate-400">Véhicule introuvable.</p>`;
+            const client = appState.clients.find(c => c.id === v.clientId) || {};
+            const passages = appState.passages.filter(p => p.vehicleId === v.id);
+            const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+
+            return `
+                <div class="space-y-6">
+                    <button onclick="switchView('home')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                        <i class="fa-solid fa-arrow-left mr-2"></i> Retour à l'accueil
+                    </button>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
+                                <span class="text-lg">${countryMeta.flag}</span>
+                                <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
+                            </div>
+                            <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white">${v.model}</h3>
+                            <p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-user mr-1"></i> ${client.name} — <i class="fa-solid fa-phone ml-2 mr-1"></i> ${client.phone}</p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-800 flex space-x-2">
+                            <button onclick="quickInvoiceForVehicle(${v.id})" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition shadow-md shadow-blue-600/20 flex items-center justify-center">
+                                <i class="fa-solid fa-cash-register mr-2"></i> Encaisser Prestation
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique Lavages & Vidanges</h4>
+                        ${passages.length === 0 ? `<p class="text-xs text-slate-400 text-center py-6">Aucun historique.</p>` : passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-slate-400"><i class="fa-solid fa-calendar mr-1"></i> ${p.date}</span>
+                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    ${p.items.map(i => `<span class="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] px-2 py-0.5 rounded-lg">${i}</span>`).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- VUE CLIENTS ---
+        function renderClientsView() {
+            return `
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white">Répertoire Clients (${appState.clients.length})</h3>
+                        <button onclick="openNewClientModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-2 rounded-xl transition">
+                            <i class="fa-solid fa-user-plus mr-1"></i> Nouveau
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        ${appState.clients.map(c => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h4 class="text-sm font-bold text-white">${c.name}</h4>
+                                        <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i> ${c.phone}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-xs font-bold text-emerald-400">${c.totalSpent.toLocaleString()} DA</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- FACTURATION ---
+        let billingCart = [];
+        let billingVehicleId = null;
+
+        function quickInvoiceForVehicle(vehId) {
+            billingVehicleId = vehId;
+            billingCart = [];
+            appState.currentView = 'billing';
+            renderApp();
+        }
+
+        function renderBillingView() {
+            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-cash-register text-blue-500 mr-2"></i> Caisse & Facturation
+                    </h3>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-medium text-slate-400">Véhicule concerné</label>
+                        <select id="billing-veh-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
+                            ${appState.vehicles.map(v => `<option value="${v.id}" ${billingVehicleId === v.id ? 'selected' : ''}>${v.plate} - ${v.model}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Catalogue & Prestations</h4>
+                        <div class="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                            ${appState.catalog.map(item => `
+                                <div class="flex justify-between items-center bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
+                                    <div>
+                                        <span class="text-xs font-medium text-white block">${item.name}</span>
+                                        <span class="text-[10px] text-blue-400 font-bold">${item.price.toLocaleString()} DA</span>
+                                    </div>
+                                    <button onclick="addToBillingCart(${item.id})" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition border border-blue-500/30">
+                                        <i class="fa-solid fa-plus"></i> Ajouter
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Panier en cours</h4>
+                        ${billingCart.length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">Aucun article</p>` : `
+                            <div class="space-y-2">
+                                ${billingCart.map((item, idx) => `
+                                    <div class="flex justify-between items-center text-xs bg-slate-950 p-2 rounded-xl">
+                                        <span class="text-slate-200">${item.name} (x${item.qty})</span>
+                                        <span class="font-bold text-white">${(item.price * item.qty).toLocaleString()} DA</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-sm font-bold">
+                                <span class="text-white">Total :</span>
+                                <span class="text-emerald-400 text-base">${total.toLocaleString()} DA</span>
+                            </div>
+                            <button onclick="validateBilling()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition text-xs">
+                                Valider & Encaisser
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function addToBillingCart(catalogId) {
+            const item = appState.catalog.find(c => c.id === catalogId);
+            if(!item) return;
+            const existing = billingCart.find(i => i.id === catalogId);
+            if(existing) existing.qty++; else billingCart.push({ ...item, qty: 1 });
+            renderApp();
+        }
+
+        function validateBilling() {
+            if(billingCart.length === 0) return;
+            const vehId = parseInt(document.getElementById('billing-veh-select').value);
+            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+            appState.passages.unshift({
+                id: appState.passages.length + 1,
+                vehicleId: vehId,
+                date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                totalAmount: total,
+                items: billingCart.map(i => `${i.name} (x${i.qty})`)
+            });
+            saveState();
+            billingCart = [];
+            alert("Paiement validé avec succès !");
+            switchView('journal');
+        }
+
+        // --- JOURNAL ---
+        function renderJournalView() {
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white">Journal des Encaissements</h3>
+                    <div class="space-y-3">
+                        ${appState.passages.map(p => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-blue-400 font-mono font-bold">Passage #${p.id}</span>
+                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
+                                </div>
+                                <div class="text-xs text-slate-300">
+                                    ${p.items.join(', ')}
+                                </div>
+                                <div class="text-[10px] text-slate-500 text-right">${p.date}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- ADMIN & MODIFICATION DES PRIX ---
+        function renderAdminView() {
+            if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
+            return `
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-shield-halved text-amber-500 mr-2"></i> Espace Administrateur
+                    </h3>
+                    <div class="flex space-x-2 border-b border-slate-800 pb-2">
+                        <button onclick="setAdminTab('users')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='users'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Équipe</button>
+                        <button onclick="setAdminTab('catalog')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='catalog'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Tarifs & Prix</button>
+                    </div>
+                    ${appState.adminTab === 'users' ? renderUsersAdminSection() : renderCatalogAdminSection()}
+                </div>
+            `;
+        }
+
+        function setAdminTab(tab) { appState.adminTab = tab; renderApp(); }
+
+        function renderUsersAdminSection() {
+            return `
+                <div class="space-y-4">
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Membres de l'équipe</h4>
+                        ${appState.users.map(u => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+                                <div>
+                                    <h5 class="text-xs font-bold text-white">${u.name}</h5>
+                                    <p class="text-[10px] text-slate-400">ID: ${u.username} • Rôle: ${u.role}</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCatalogAdminSection() {
+            return `
+                <div class="space-y-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un nouveau service / produit</h4>
+                        <form onsubmit="addNewCatalogItem(event)" class="space-y-3">
+                            <input type="text" id="cat-name" required placeholder="Nom (ex: Lustrage Pro)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            <div class="grid grid-cols-2 gap-2">
+                                <select id="cat-category" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="LAVAGE">Lavage</option>
+                                    <option value="VIDANGE">Vidange</option>
+                                    <option value="FILTRE">Filtre</option>
+                                    <option value="ACCESSOIRE">Accessoire</option>
+                                </select>
+                                <input type="number" id="cat-price" required placeholder="Prix (DA)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition">Ajouter au catalogue</button>
+                        </form>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Modifier les tarifs en vigueur</h4>
+                        ${appState.catalog.map(item => `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
+                                <div>
+                                    <h5 class="text-xs font-bold text-white">${item.name}</h5>
+                                    <span class="text-[10px] text-slate-400">${item.category}</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-28 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right focus:outline-none focus:border-blue-500">
+                                    <span class="text-[10px] text-slate-400 font-medium">DA</span>
+                                    <button onclick="deleteCatalogItem(${item.id})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateCatalogPrice(itemId, newPrice) {
+            const item = appState.catalog.find(c => c.id === itemId);
+            if(item) {
+                item.price = parseFloat(newPrice) || 0;
+                saveState();
+            }
+        }
+
+        function addNewCatalogItem(e) {
+            e.preventDefault();
+            const name = document.getElementById('cat-name').value.trim();
+            const category = document.getElementById('cat-category').value;
+            const price = parseFloat(document.getElementById('cat-price').value);
+
+            appState.catalog.push({ id: appState.catalog.length + 1, name, category, price });
+            saveState();
+            renderApp();
+        }
+
+        function deleteCatalogItem(itemId) {
+            appState.catalog = appState.catalog.filter(c => c.id !== itemId);
+            saveState();
+            renderApp();
+        }
+
+        function openNewClientModal() {
+            const name = prompt("Nom complet du client :");
+            if(!name) return;
+            const phone = prompt("Numéro de téléphone :", "+213 ");
+            if(!phone) return;
+            const plate = prompt("Plaque d'immatriculation (ex: 12456-124-16) :").toUpperCase();
+            if(!plate) return;
+            const model = prompt("Modèle du véhicule :") || "Véhicule";
+
+            const newClientId = appState.clients.length + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            const newVehId = appState.vehicles.length + 1;
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage: 15000, country: 'DZ' });
+            saveState();
+            renderApp();
+            openVehicleDetail(newVehId);
+        }
+
+        window.onload = function() {
+            if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+                location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+                return;
+            }
+            renderApp();
+        };
     </script>
 </body>
 </html>
