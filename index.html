@@ -147,4 +147,399 @@
                             Identifiant ou code PIN incorrect.
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-400 mb-1">Identifiant</label
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Identifiant</label>
+                            <input type="text" id="login-user" required placeholder="Votre identifiant" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Code PIN</label>
+                            <input type="password" id="login-pin" required placeholder="••••" maxlength="6" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 tracking-widest">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-600/30 text-sm">
+                            Se connecter
+                        </button>
+                    </form>
+                </div>
+            `;
+        }
+
+        // --- EN-TÊTE & NAVIGATION ---
+        function renderHeader() {
+            const roleInfo = ROLES_CONFIG[appState.currentUser.role];
+            return `
+                <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold">
+                            ${appState.currentUser.name.charAt(0)}
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-semibold text-white leading-tight">${appState.currentUser.name}</h2>
+                            <span class="inline-block text-[10px] px-2 py-0.5 rounded-full border mt-0.5 ${roleInfo.badge}">${roleInfo.label}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${appState.currentUser.role === 'admin' ? `
+                            <button onclick="switchView('admin')" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400 hover:bg-slate-700 transition" title="Administration">
+                                <i class="fa-solid fa-shield-halved text-sm"></i>
+                            </button>
+                        ` : ''}
+                        <button onclick="logoutUser()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-rose-400 hover:bg-slate-700 transition" title="Déconnexion">
+                            <i class="fa-solid fa-power-off text-sm"></i>
+                        </button>
+                    </div>
+                </header>
+            `;
+        }
+
+        function renderNav() {
+            const v = appState.currentView;
+            return `
+                <nav class="absolute bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 px-2 py-2 flex justify-around items-center z-30">
+                    <button onclick="switchView('home')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='home'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-house text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Accueil</span>
+                    </button>
+                    <button onclick="switchView('clients')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='clients'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-users text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Clients</span>
+                    </button>
+                    <button onclick="switchView('billing')" class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 border-4 border-slate-950 transition hover:bg-blue-500">
+                        <i class="fa-solid fa-cash-register text-lg"></i>
+                    </button>
+                    <button onclick="switchView('journal')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='journal'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-book text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Journal</span>
+                    </button>
+                    ${appState.currentUser.role === 'admin' ? `
+                    <button onclick="switchView('admin')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='admin'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
+                        <i class="fa-solid fa-gear text-lg mb-0.5"></i>
+                        <span class="text-[10px] font-medium">Admin</span>
+                    </button>` : ''}
+                </nav>
+            `;
+        }
+
+        function switchView(viewName) {
+            appState.currentView = viewName;
+            renderApp();
+        }
+
+        // --- VUE ACCUEIL ---
+        function renderHomeView() {
+            const productsList = appState.catalog.filter(item => item.type === 'PRODUCT');
+            return `
+                <div class="space-y-6">
+                    <!-- SECTION 1 : RECHERCHE & GESTION DES PLAQUES / VÉHICULES -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                        <h3 class="text-sm font-semibold text-white flex items-center">
+                            <i class="fa-solid fa-car text-blue-500 mr-2"></i> Gestion Véhicules & Plaques
+                        </h3>
+                        <div class="relative">
+                            <input type="text" id="search-plate-input" oninput="filterVehicles(this.value)" placeholder="Entrer plaque, nom ou modèle..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 uppercase">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
+                                <i class="fa-solid fa-camera mr-2"></i> Scanner Plaque
+                            </button>
+                            <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
+                                <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2 : SCAN & GESTION DES PRODUITS -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                        <h3 class="text-sm font-semibold text-white flex items-center">
+                            <i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i> Stocks & Scan Produits
+                        </h3>
+                        <button onclick="openProductScanner()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs text-white py-3 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-amber-600/20">
+                            <i class="fa-solid fa-barcode mr-2 text-sm"></i> Scanner un Produit / Pièce (Code-barres)
+                        </button>
+                    </div>
+
+                    <div id="search-results-container" class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center">
+                                <i class="fa-solid fa-box text-emerald-500 mr-2"></i> Stocks Produits Restants
+                            </h4>
+                            <span class="text-[11px] text-slate-500">${productsList.length} articles</span>
+                        </div>
+                        ${renderRemainingStocksList()}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRemainingStocksList() {
+            const productsList = appState.catalog.filter(item => item.type === 'PRODUCT');
+            if (productsList.length === 0) {
+                return `
+                    <div class="text-center py-8 bg-slate-900/40 rounded-2xl border border-slate-800">
+                        <p class="text-xs text-slate-400">Aucun produit en stock enregistré.</p>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl divide-y divide-slate-800/80 shadow-md overflow-hidden">
+                    ${productsList.map(item => {
+                        const isLow = item.stock <= 5;
+                        const isEmpty = item.stock === 0;
+                        const badgeClass = isEmpty
+                            ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                            : (isLow
+                                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30');
+
+                        return `
+                            <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-800/40 transition">
+                                <div>
+                                    <span class="text-xs font-medium text-slate-100 block">${item.name}</span>
+                                    <span class="text-[10px] text-slate-400 font-mono">Code: ${item.barcode || 'N/C'}</span>
+                                </div>
+                                <span class="text-xs font-bold px-2.5 py-1 rounded-lg border shrink-0 ${badgeClass}">
+                                    ${item.stock} en stock
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderVehicleList(vehiclesList) {
+            if(vehiclesList.length === 0) {
+                return `
+                    <div class="text-center py-10 bg-slate-900/40 rounded-2xl border border-slate-800">
+                        <i class="fa-solid fa-car-side text-3xl text-slate-600 mb-2"></i>
+                        <p class="text-sm text-slate-400">Aucun véhicule trouvé.</p>
+                    </div>
+                `;
+            }
+            return vehiclesList.map(v => {
+                const client = appState.clients.find(c => c.id === v.clientId) || { name: 'Client Inconnu', phone: '' };
+                const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+
+                return `
+                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
+                                <span class="text-base">${countryMeta.flag}</span>
+                                <span class="font-mono font-bold text-white text-sm tracking-wide">${v.plate}</span>
+                            </div>
+                            <span class="text-xs text-blue-400 font-medium">${v.mileage.toLocaleString()} km</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">${v.model}</h4>
+                                <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1"></i> ${client.name} (${client.phone})</p>
+                            </div>
+                            <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">Historique <i class="fa-solid fa-chevron-right ml-1"></i></span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterVehicles(query) {
+            const q = query.trim().toLowerCase();
+            const container = document.getElementById('search-results-container');
+            if (!q) {
+                container.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-box text-emerald-500 mr-2"></i> Stocks Produits Restants
+                        </h4>
+                        <span class="text-[11px] text-slate-500">${appState.catalog.filter(i=>i.type==='PRODUCT').length} articles</span>
+                    </div>
+                    ${renderRemainingStocksList()}
+                `;
+                return;
+            }
+            const filtered = appState.vehicles.filter(v => {
+                const client = appState.clients.find(c => c.id === v.clientId) || {};
+                return v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q) || (client.name && client.name.toLowerCase().includes(q));
+            });
+            container.innerHTML = `
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche véhicules</h4>
+                ${renderVehicleList(filtered)}
+            `;
+        }
+
+        // --- 1. SCANNER DE PRODUITS DÉDIÉ ---
+        function openProductScanner() {
+            const modal = document.createElement('div');
+            modal.id = 'scanner-modal';
+            modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-barcode text-amber-500 mr-2"></i>Scanner un Produit ou une Pièce</h3>
+                        <button onclick="closeProductScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <p class="text-xs text-slate-300">Scannez le code-barres de la pièce (filtre, huile, accessoire) ou saisissez son code :</p>
+                        
+                        <input id="scan-product-input" type="text" placeholder="Ex: BAR-FILTRE-HUILE" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-amber-500 tracking-wider text-center">
+
+                        <div class="flex space-x-2 pt-1">
+                            <label class="flex-1 bg-amber-600 hover:bg-amber-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-amber-600/30">
+                                <i class="fa-solid fa-camera mr-1.5"></i> Caméra / Photo
+                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processProductCameraCapture(this)">
+                            </label>
+                            <button onclick="validateProductScan()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                                <i class="fa-solid fa-check mr-1.5"></i> Rechercher Produit
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            setTimeout(() => { document.getElementById('scan-product-input')?.focus(); }, 100);
+        }
+
+        function closeProductScanner() {
+            const m = document.getElementById('scanner-modal');
+            if (m) m.remove();
+        }
+
+        function processProductCameraCapture(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const inputField = document.getElementById('scan-product-input');
+            if(inputField) {
+                inputField.placeholder = "Code produit capturé";
+            }
+            input.value = '';
+        }
+
+        function validateProductScan() {
+            const input = document.getElementById('scan-product-input');
+            const val = (input ? input.value : '').trim().toUpperCase();
+            if (!val) {
+                alert("Veuillez entrer ou scanner un code produit.");
+                return;
+            }
+            closeProductScanner();
+
+            const product = appState.catalog.find(c => c.type === 'PRODUCT' && ((c.barcode && c.barcode.toUpperCase() === val) || c.name.toUpperCase().includes(val)));
+            if (product) {
+                alert(`📦 Produit trouvé !\n• Nom : ${product.name}\n• Stock restant : ${product.stock} unités\n• Prix : ${product.price} DA`);
+            } else {
+                alert(`Aucun produit trouvé pour "${val}". Vérifiez le code-barres dans le catalogue administrateur.`);
+            }
+        }
+
+        // --- 2. SCANNER DE PLAQUES DÉDIÉ ---
+        function openPlateScanner() {
+            const modal = document.createElement('div');
+            modal.id = 'plate-scanner-modal';
+            modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-car text-blue-500 mr-2"></i>Scanner une Plaque d'Immatriculation</h3>
+                        <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <p class="text-xs text-slate-300">Scannez ou saisissez la plaque d'immatriculation du véhicule :</p>
+                        
+                        <input id="scan-plate-input" type="text" placeholder="Ex: 01234-116-15" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
+
+                        <div class="flex space-x-2 pt-1">
+                            <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
+                                <i class="fa-solid fa-camera mr-1.5"></i> Photo Plaque
+                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processPlateCameraCapture(this)">
+                            </label>
+                            <button onclick="validatePlateScan()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                                <i class="fa-solid fa-check mr-1.5"></i> Valider Plaque
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            setTimeout(() => { document.getElementById('scan-plate-input')?.focus(); }, 100);
+        }
+
+        function closePlateScanner() {
+            const m = document.getElementById('plate-scanner-modal');
+            if (m) m.remove();
+        }
+
+        function processPlateCameraCapture(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const inputField = document.getElementById('scan-plate-input');
+            if(inputField) {
+                inputField.placeholder = "Plaque capturée par image";
+            }
+            input.value = '';
+        }
+
+        function validatePlateScan() {
+            const input = document.getElementById('scan-plate-input');
+            const val = (input ? input.value : '').trim().toUpperCase();
+            if (!val) {
+                alert("Veuillez entrer ou scanner une plaque.");
+                return;
+            }
+            closePlateScanner();
+
+            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const existingVeh = appState.vehicles.find(v => norm(v.plate) === norm(val));
+            if (existingVeh) {
+                openVehicleDetail(existingVeh.id);
+                return;
+            }
+
+            if (!confirm(`La plaque "${val}" n'est pas enregistrée. Créer un nouveau véhicule ?`)) return;
+            
+            const name = prompt("Nom complet du client :", "") || "Client " + val;
+            const phone = prompt("Numéro de téléphone :", "+213 ") || "";
+            const model = prompt("Modèle du véhicule :", "") || "Véhicule";
+            const mileage = parseInt(prompt("Kilométrage actuel :", "0")) || 0;
+
+            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
+            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
+            
+            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate: val, model, mileage, country: 'DZ' });
+            
+            saveState();
+            renderApp();
+            openVehicleDetail(newVehId);
+        }
+
+        // --- VUE DETAIL VEHICULE, CLIENT & PARAMÈTRES ---
+        let selectedVehicleId = null;
+        function openVehicleDetail(vehId) {
+            selectedVehicleId = vehId;
+            appState.currentView = 'vehicle_detail';
+            renderApp();
+        }
+
+        function editVehicleAndClientParams(vehId) {
+            const v = appState.vehicles.find(item => item.id === vehId);
+            if (!v) return;
+            const client = appState.clients.find(c => c.id === v.clientId) || { name: '', phone: '' };
+
+            const newPlate = prompt("Modifier la plaque d'immatriculation :", v.plate);
+            if (newPlate === null) return;
+            const newModel = prompt("Modifier le modèle du véhicule :", v.model);
+            if (newModel === null) return;
+            const newKm = prompt("Modifier le kilométrage actuel :", v.mileage);
+            if (newKm === null) return;
+            const newClientName = prompt("Modifier le nom du client propriétaire :", client.name);
+            if (newClientName === null) return;
+            const newClientPhone = prompt("Modifier le téléphone du client :", client.phone);
+            if (newClientPhone === null) return;
+
+            v.plate = newPlate.trim().toUpperCase();
+            v.model = newModel.trim();
+            v.mileage = parseInt(newKm) || v.mileage;
+
+            client.name = newClientName.trim();
+            client.phone = newClientPhone.trim();
+
+            save
