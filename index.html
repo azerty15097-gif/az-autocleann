@@ -208,7 +208,7 @@
 
       <!-- Pied de page Login -->
       <p class="text-center text-[10px] text-slate-500 pt-3 relative z-10">
-        AZ-LAVAGE v2.0 • Système de gestion station lavage & entretien
+        AZ-LAVAGE  • Système de gestion station lavage & entretien
       </p>
     </section>
 
@@ -303,8 +303,8 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'AZ_LAVAGE_DB_V2';
-    const SESSION_KEY = 'AZ_LAVAGE_SESSION_V2';
+    const STORAGE_KEY = 'AZ_LAVAGE_DB';
+    const SESSION_KEY = 'AZ_LAVAGE_SESSION';
     let activeMediaStream = null;
     let barcodeScanInterval = null;
     let zxingReader = null;
@@ -323,7 +323,7 @@
       users: [
         {
           id: 'u1',
-          name: 'Yacine Benali (Admin)',
+          name: 'Ziad (Admin)',
           role: 'admin',
           login: 'admin@az-lavage.dz',
           password: 'admin123',
@@ -702,49 +702,102 @@
         activeMediaStream.getTracks().forEach(track => track.stop());
         activeMediaStream = null;
       }
+      document.querySelectorAll('video').forEach(video => {
+        if (video.srcObject) video.srcObject = null;
+      });
     }
 
     async function startCameraInElement(videoElementId, fallbackOverlayId, mode = 'plate') {
+      // Ne jamais conserver deux flux caméra simultanément.
       stopCameraStream();
       const videoEl = document.getElementById(videoElementId);
       const fallbackEl = document.getElementById(fallbackOverlayId);
-      if (!videoEl) return;
+      if (!videoEl) {
+        showToast('Zone vidéo introuvable. Rechargez la page.', 'error');
+        return;
+      }
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // getUserMedia est bloqué par les navigateurs sur HTTP (sauf localhost).
+      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         if (fallbackEl) fallbackEl.classList.remove('hidden');
-        showToast('Caméra non disponible sur cet appareil', 'warning');
+        const msg = !window.isSecureContext
+          ? 'Caméra bloquée : ouvrez AZ-LAVAGE en HTTPS (ou sur localhost). Une adresse HTTP avec IP LAN ne suffit pas.'
+          : 'Caméra indisponible : vérifiez le navigateur et les autorisations caméra.';
+        showToast(msg, 'error');
+        console.error('[AZ-LAVAGE camera] Secure context:', window.isSecureContext,
+          'mediaDevices:', !!navigator.mediaDevices);
         return;
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        });
+        // Attributs explicites requis notamment par Safari/iOS.
+        videoEl.setAttribute('autoplay', '');
+        videoEl.setAttribute('playsinline', '');
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          });
+        } catch (firstError) {
+          // Certains appareils refusent les contraintes de résolution/facingMode.
+          // On retente avec la configuration vidéo la plus simple.
+          console.warn('[AZ-LAVAGE camera] Première tentative échouée:', firstError);
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
         activeMediaStream = stream;
         videoEl.srcObject = stream;
+        await new Promise((resolve, reject) => {
+          if (videoEl.readyState >= 2) return resolve();
+          const onReady = () => { cleanup(); resolve(); };
+          const onError = () => { cleanup(); reject(new Error('Flux vidéo non lisible')); };
+          const cleanup = () => {
+            videoEl.removeEventListener('loadedmetadata', onReady);
+            videoEl.removeEventListener('error', onError);
+          };
+          videoEl.addEventListener('loadedmetadata', onReady, { once: true });
+          videoEl.addEventListener('error', onError, { once: true });
+        });
         await videoEl.play();
         if (fallbackEl) fallbackEl.classList.add('hidden');
-        
+
         if (mode === 'plate') {
-          const stopBtn = document.getElementById('btn-stop-plate-cam');
-          const captureBtn = document.getElementById('btn-capture-plate-ocr');
-          if (stopBtn) stopBtn.classList.remove('hidden');
-          if (captureBtn) captureBtn.classList.remove('hidden');
-          showToast('Caméra prête : cadrez la plaque et appuyez sur "Capturer Plaque"', 'info');
+          document.getElementById('btn-stop-plate-cam')?.classList.remove('hidden');
+          document.getElementById('btn-capture-plate-ocr')?.classList.remove('hidden');
+          showToast('Caméra prête : cadrez la plaque puis capturez-la.', 'success');
         } else if (mode === 'barcode') {
-          const stopBarcodeBtn = document.getElementById('btn-stop-barcode-cam');
-          if (stopBarcodeBtn) stopBarcodeBtn.classList.remove('hidden');
-          showToast('Lecteur actif : présentez un code-barres ou QR Code', 'info');
+          document.getElementById('btn-stop-barcode-cam')?.classList.remove('hidden');
+          document.getElementById('btn-capture-barcode')?.classList.remove('hidden');
+          showToast('Caméra active : présentez le code-barres ou QR au centre.', 'success');
           startContinuousBarcodeDetection(videoEl);
         }
       } catch (err) {
+        console.error('[AZ-LAVAGE camera] Erreur ouverture caméra:', err);
+        if (activeMediaStream) {
+          activeMediaStream.getTracks().forEach(track => track.stop());
+          activeMediaStream = null;
+        }
+        videoEl.srcObject = null;
         if (fallbackEl) fallbackEl.classList.remove('hidden');
-        showToast('Accès caméra refusé ou indisponible (vérifiez HTTPS/permissions)', 'warning');
+        let message = 'Impossible d’ouvrir la caméra.';
+        if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+          message = 'Autorisation caméra refusée. Autorisez la caméra dans les paramètres du navigateur.';
+        } else if (err && (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')) {
+          message = 'Aucune caméra détectée sur cet appareil.';
+        } else if (err && (err.name === 'NotReadableError' || err.name === 'TrackStartError')) {
+          message = 'Caméra déjà utilisée par une autre application. Fermez-la puis réessayez.';
+        } else if (err && err.name === 'OverconstrainedError') {
+          message = 'Caméra incompatible avec les paramètres demandés. Réessayez.';
+        }
+        showToast(message, 'error');
       }
     }
 
@@ -765,6 +818,7 @@
       const stopBtn = document.getElementById('btn-stop-barcode-cam');
       if (fallbackEl) fallbackEl.classList.remove('hidden');
       if (stopBtn) stopBtn.classList.add('hidden');
+      document.getElementById('btn-capture-barcode')?.classList.add('hidden');
       showToast('Lecteur caméra arrêté', 'info');
     }
 
@@ -777,10 +831,18 @@
       let nativeDetector = null;
       if ('BarcodeDetector' in window) {
         try {
-          nativeDetector = new window.BarcodeDetector({
-            formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf']
-          });
+          const wantedFormats = [
+            'qr_code', 'ean_13', 'ean_8', 'code_128',
+            'code_39', 'upc_a', 'upc_e', 'itf'
+          ];
+          const supportedFormats = typeof window.BarcodeDetector.getSupportedFormats === 'function'
+            ? wantedFormats.filter(format => window.BarcodeDetector.getSupportedFormats().includes(format))
+            : wantedFormats;
+          nativeDetector = new window.BarcodeDetector(
+            supportedFormats.length ? { formats: supportedFormats } : undefined
+          );
         } catch (e) {
+          console.warn('[AZ-LAVAGE scanner] BarcodeDetector indisponible, essai ZXing.', e);
           nativeDetector = null;
         }
       }
@@ -1827,7 +1889,7 @@
             </button>
 
             <!-- Bouton flottant capture photo directe du code -->
-            <button onclick="captureBarcodeSnapshot()" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-xl bg-emerald-500/95 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold shadow-lg flex items-center gap-1.5 active:scale-95 transition">
+            <button id="btn-capture-barcode" onclick="captureBarcodeSnapshot()" class="hidden absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-xl bg-emerald-500/95 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold shadow-lg flex items-center gap-1.5 active:scale-95 transition">
               <i class="fa-solid fa-expand"></i>
               <span>Capturer le code</span>
             </button>
@@ -1864,12 +1926,15 @@
 
             <!-- Saisie manuelle d'un code -->
             <form onsubmit="handleManualBarcodeSubmit(event)" class="flex gap-2">
-              <input id="manual-barcode-input" type="text" placeholder="Saisir code-barres (ex: 6130001122334)" required
+              <input id="manual-barcode-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="Saisir ou coller un code (EAN / QR)" required
                 class="flex-1 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs focus:outline-none focus:border-cyan-500" />
               <button type="submit" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-cyan-600 text-white font-bold text-xs">
                 Vérifier
               </button>
             </form>
+            <p class="text-[10px] text-slate-400 -mt-1">
+              Astuce : si la caméra ne lit pas le code, saisissez-le manuellement. Les espaces sont ignorés.
+            </p>
 
             <!-- Codes de test rapides -->
             <div class="pt-1">
@@ -1886,8 +1951,14 @@
       `;
     }
 
+    function normalizeProductBarcode(value) {
+      return String(value ?? '').trim().replace(/\\s+/g, '').toUpperCase();
+    }
+
     function simulateBarcodeScan() {
-      const existingCodes = db.catalog.map(i => i.barcode);
+      const existingCodes = (db.catalog || [])
+        .map(item => item && item.barcode)
+        .filter(Boolean);
       const pool = [...existingCodes, 'NEW-PROD-' + Math.floor(100 + Math.random() * 899)];
       const code = pool[Math.floor(Math.random() * pool.length)];
       processScannedBarcode(code);
@@ -1895,12 +1966,31 @@
 
     function handleManualBarcodeSubmit(e) {
       e.preventDefault();
-      const val = document.getElementById('manual-barcode-input').value.trim();
-      if (val) processScannedBarcode(val);
+      const input = document.getElementById('manual-barcode-input');
+      const val = normalizeProductBarcode(input?.value);
+      if (!val) {
+        showToast('Saisissez un code produit valide.', 'warning');
+        input?.focus();
+        return;
+      }
+      processScannedBarcode(val);
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
     }
 
-    function processScannedBarcode(code) {
-      const item = db.catalog.find(p => p.barcode.toLowerCase() === code.toLowerCase());
+    function processScannedBarcode(rawCode) {
+      const code = normalizeProductBarcode(rawCode);
+      if (!code) {
+        showToast('Aucun code produit détecté.', 'warning');
+        return;
+      }
+
+      const catalog = Array.isArray(db.catalog) ? db.catalog : [];
+      const item = catalog.find(product =>
+        normalizeProductBarcode(product?.barcode) === code
+      );
 
       if (isAdmin()) {
         // MODE ADMIN : Formulaire d'ajout ou d'édition pré-rempli avec le code scanné
