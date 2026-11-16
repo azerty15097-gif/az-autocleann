@@ -366,71 +366,138 @@
             `;
         }
 
-        // --- 1. SCANNER DE PRODUITS DÉDIÉ ---
+        // --- SCANNER PRODUITS : caméra en direct + lecture du code-barres ---
+        let productCameraStream = null;
+        let productScanActive = false;
+        let productDetector = null;
+
         function openProductScanner() {
+            if (document.getElementById('scanner-modal')) return;
+
             const modal = document.createElement('div');
             modal.id = 'scanner-modal';
-            modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-3 overflow-y-auto';
             modal.innerHTML = `
                 <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
                     <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-barcode text-amber-500 mr-2"></i>Scanner un Produit ou une Pièce</h3>
-                        <button onclick="closeProductScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-barcode text-amber-500 mr-2"></i>Scanner un Produit / Pièce</h3>
+                        <button type="button" onclick="closeProductScanner()" class="text-slate-400 hover:text-white px-2" aria-label="Fermer"><i class="fa-solid fa-xmark text-lg"></i></button>
                     </div>
-
+                    <p id="product-camera-status" class="text-xs text-slate-300">Appuyez sur « Démarrer la caméra », puis présentez le code-barres devant l'objectif.</p>
+                    <div class="relative bg-black rounded-xl overflow-hidden border border-slate-700">
+                        <video id="product-camera-video" class="w-full max-h-64 object-contain" autoplay muted playsinline></video>
+                        <div class="absolute inset-x-6 top-1/2 border-t-2 border-amber-400 pointer-events-none"></div>
+                    </div>
+                    <button type="button" onclick="startProductCamera()" class="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs py-3 rounded-xl font-semibold">
+                        <i class="fa-solid fa-camera mr-2"></i>Démarrer la caméra
+                    </button>
                     <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <p class="text-xs text-slate-300">Scannez le code-barres de la pièce (filtre, huile, accessoire) ou saisissez son code :</p>
-                        
-                        <input id="scan-product-input" type="text" placeholder="Ex: BAR-FILTRE-HUILE" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-amber-500 tracking-wider text-center">
-
-                        <div class="flex space-x-2 pt-1">
-                            <label class="flex-1 bg-amber-600 hover:bg-amber-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-amber-600/30">
-                                <i class="fa-solid fa-camera mr-1.5"></i> Caméra / Photo
-                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processProductCameraCapture(this)">
-                            </label>
-                            <button onclick="validateProductScan()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
-                                <i class="fa-solid fa-check mr-1.5"></i> Rechercher Produit
-                            </button>
-                        </div>
+                        <label for="scan-product-input" class="text-xs text-slate-300 block">Ou saisir le code-barres manuellement :</label>
+                        <input id="scan-product-input" type="text" autocomplete="off" placeholder="Ex : BAR-FILTRE-HUILE / 123456789" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-amber-500 tracking-wider text-center">
+                        <button type="button" onclick="validateProductScan()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium">
+                            <i class="fa-solid fa-magnifying-glass mr-1.5"></i>Rechercher le produit
+                        </button>
                     </div>
+                    <p class="text-[10px] text-slate-500">Caméra disponible en HTTPS (ou localhost), après autorisation du navigateur.</p>
                 </div>`;
             document.body.appendChild(modal);
-            setTimeout(() => { document.getElementById('scan-product-input')?.focus(); }, 100);
+        }
+
+        async function startProductCamera() {
+            const video = document.getElementById('product-camera-video');
+            const status = document.getElementById('product-camera-status');
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                status.textContent = "Caméra indisponible. Ouvrez l'application en HTTPS ou sur localhost.";
+                return;
+            }
+            if (!('BarcodeDetector' in window)) {
+                status.textContent = "Lecture automatique non prise en charge par ce navigateur. Utilisez la saisie manuelle ou un lecteur code-barres USB/Bluetooth.";
+                return;
+            }
+
+            try {
+                stopProductCamera();
+                const wantedFormats = ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'itf'];
+                const supported = await BarcodeDetector.getSupportedFormats();
+                const formats = wantedFormats.filter(f => supported.includes(f));
+                if (!formats.length) throw new Error("Aucun format de code-barres compatible.");
+                productDetector = new BarcodeDetector({ formats });
+
+                productCameraStream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+                video.srcObject = productCameraStream;
+                await video.play();
+                productScanActive = true;
+                status.textContent = "Caméra active — placez le code-barres dans le cadre.";
+
+                const scanFrame = async () => {
+                    if (!productScanActive || video.readyState < 2) return;
+                    try {
+                        const codes = await productDetector.detect(video);
+                        if (codes.length && codes[0].rawValue) {
+                            const field = document.getElementById('scan-product-input');
+                            if (field) field.value = codes[0].rawValue;
+                            stopProductCamera();
+                            validateProductScan();
+                            return;
+                        }
+                    } catch (err) {
+                        console.warn("Erreur de lecture du code-barres :", err);
+                    }
+                    if (productScanActive) setTimeout(scanFrame, 180);
+                };
+                scanFrame();
+            } catch (err) {
+                console.error("Erreur caméra :", err);
+                status.textContent = err.name === 'NotAllowedError'
+                    ? "Accès caméra refusé. Autorisez la caméra dans les paramètres du navigateur."
+                    : "Impossible d'ouvrir la caméra : " + (err.message || err.name);
+                stopProductCamera();
+            }
+        }
+
+        function stopProductCamera() {
+            productScanActive = false;
+            if (productCameraStream) {
+                productCameraStream.getTracks().forEach(track => track.stop());
+                productCameraStream = null;
+            }
+            const video = document.getElementById('product-camera-video');
+            if (video) video.srcObject = null;
         }
 
         function closeProductScanner() {
-            const m = document.getElementById('scanner-modal');
-            if (m) m.remove();
-        }
-
-        function processProductCameraCapture(input) {
-            const file = input.files && input.files[0];
-            if (!file) return;
-            const inputField = document.getElementById('scan-product-input');
-            if(inputField) {
-                inputField.placeholder = "Code produit capturé";
-            }
-            input.value = '';
+            stopProductCamera();
+            const modal = document.getElementById('scanner-modal');
+            if (modal) modal.remove();
         }
 
         function validateProductScan() {
             const input = document.getElementById('scan-product-input');
             const val = (input ? input.value : '').trim().toUpperCase();
             if (!val) {
-                alert("Veuillez entrer ou scanner un code produit.");
+                alert("Veuillez scanner ou saisir un code produit.");
                 return;
             }
-            closeProductScanner();
 
-            const product = appState.catalog.find(c => c.type === 'PRODUCT' && ((c.barcode && c.barcode.toUpperCase() === val) || c.name.toUpperCase().includes(val)));
+            const product = appState.catalog.find(c =>
+                c.type === 'PRODUCT' &&
+                ((c.barcode && String(c.barcode).trim().toUpperCase() === val) ||
+                 c.name.toUpperCase().includes(val))
+            );
+
             if (product) {
-                alert(`📦 Produit trouvé !\n• Nom : ${product.name}\n• Stock restant : ${product.stock} unités\n• Prix : ${product.price} DA`);
+                closeProductScanner();
+                alert(`Produit trouvé !\nNom : ${product.name}\nStock restant : ${product.stock} unités\nPrix : ${product.price} DA`);
             } else {
-                alert(`Aucun produit trouvé pour "${val}". Vérifiez le code-barres dans le catalogue administrateur.`);
+                alert(`Aucun produit trouvé pour « ${val} ». Vérifiez le code-barres dans le catalogue administrateur.`);
             }
         }
 
-        // --- 2. SCANNER DE PLAQUES DÉDIÉ ---
+        // --- 2. SCANNER DE PLAQUES DÉDIÉ (Corrigé pour mobile) ---
         function openPlateScanner() {
             const modal = document.createElement('div');
             modal.id = 'plate-scanner-modal';
@@ -447,12 +514,14 @@
                         
                         <input id="scan-plate-input" type="text" placeholder="Ex: 01234-116-15" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
 
-                        <div class="flex space-x-2 pt-1">
-                            <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
-                                <i class="fa-solid fa-camera mr-1.5"></i> Photo Plaque
-                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processPlateCameraCapture(this)">
-                            </label>
-                            <button onclick="validatePlateScan()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                        <div class="flex flex-col space-y-2 pt-1">
+                            <div class="relative w-full bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center shadow-md shadow-blue-600/30 overflow-hidden cursor-pointer">
+                                <span class="flex items-center justify-center pointer-events-none">
+                                    <i class="fa-solid fa-camera mr-2"></i> Prendre en photo la Plaque
+                                </span>
+                                <input type="file" id="plate-camera-file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onchange="processPlateCameraCapture(this)">
+                            </div>
+                            <button onclick="validatePlateScan()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
                                 <i class="fa-solid fa-check mr-1.5"></i> Valider Plaque
                             </button>
                         </div>
@@ -472,9 +541,8 @@
             if (!file) return;
             const inputField = document.getElementById('scan-plate-input');
             if(inputField) {
-                inputField.placeholder = "Plaque capturée par image";
+                inputField.placeholder = "Photo de plaque enregistrée";
             }
-            input.value = '';
         }
 
         function validatePlateScan() {
@@ -630,7 +698,7 @@
             `;
         }
 
-        // --- FACTURATION (SERVICES VS PRODUITS & DÉDUCTION STOCK) ---
+        // --- FACTURATION ---
         let billingCart = [];
         let billingVehicleId = null;
 
@@ -755,7 +823,6 @@
             const vehId = parseInt(document.getElementById('billing-veh-select').value);
             const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
-            // Déduire le stock des produits vendus
             billingCart.forEach(cartItem => {
                 if(cartItem.type === 'PRODUCT') {
                     const catItem = appState.catalog.find(c => c.id === cartItem.id);
@@ -808,7 +875,7 @@
             `;
         }
 
-        // --- ADMIN : ÉQUIPE, SERVICES & PRODUITS ---
+        // --- ADMIN ---
         function renderAdminView() {
             if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
             return `
@@ -827,7 +894,6 @@
 
         function setAdminTab(tab) { appState.adminTab = tab; renderApp(); }
 
-        // --- GESTION ÉQUIPE (MODIFIER, AJOUTER, SUPPRIMER, ACTIVER/DÉSACTIVER) ---
         function renderUsersAdminSection() {
             return `
                 <div class="space-y-4">
@@ -934,7 +1000,6 @@
             }
         }
 
-        // --- GESTION CATALOGUE (SERVICES SÉPARÉS DES PRODUITS & STOCKS) ---
         function renderCatalogAdminSection() {
             const services = appState.catalog.filter(i => i.type === 'SERVICE');
             const products = appState.catalog.filter(i => i.type === 'PRODUCT');
