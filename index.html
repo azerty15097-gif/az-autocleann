@@ -228,39 +228,30 @@
             const productsList = appState.catalog.filter(item => item.type === 'PRODUCT');
             return `
                 <div class="space-y-6">
-                    <!-- SECTION 1 : RECHERCHE & GESTION DES PLAQUES / VÉHICULES -->
-                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-                        <h3 class="text-sm font-semibold text-white flex items-center">
-                            <i class="fa-solid fa-car text-blue-500 mr-2"></i> Gestion Véhicules & Plaques
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                        <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
+                            <i class="fa-solid fa-magnifying-glass text-blue-500 mr-2"></i> Recherche & Entrée Véhicule
                         </h3>
-                        <div class="relative">
-                            <input type="text" id="search-plate-input" oninput="filterVehicles(this.value)" placeholder="Entrer plaque, nom ou modèle..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 uppercase">
-                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                        <div class="space-y-3">
+                            <div class="relative">
+                                <input type="text" id="search-plate-input" oninput="filterVehicles(this.value)" placeholder="Entrer plaque, nom ou modèle..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 uppercase">
+                                <i class="fa-solid fa-car absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="openUnifiedScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
+                                    <i class="fa-solid fa-qrcode mr-2"></i> Scan (Plaque / QR / Barre)
+                                </button>
+                                <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
+                                    <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
+                                </button>
+                            </div>
                         </div>
-                        <div class="flex space-x-2">
-                            <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
-                                <i class="fa-solid fa-camera mr-2"></i> Scanner Plaque
-                            </button>
-                            <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
-                                <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- SECTION 2 : SCAN & GESTION DES PRODUITS -->
-                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-                        <h3 class="text-sm font-semibold text-white flex items-center">
-                            <i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i> Stocks & Scan Produits
-                        </h3>
-                        <button onclick="openProductScanner()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs text-white py-3 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-amber-600/20">
-                            <i class="fa-solid fa-barcode mr-2 text-sm"></i> Scanner un Produit / Pièce (Code-barres)
-                        </button>
                     </div>
 
                     <div id="search-results-container" class="space-y-3">
                         <div class="flex justify-between items-center">
                             <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center">
-                                <i class="fa-solid fa-box text-emerald-500 mr-2"></i> Stocks Produits Restants
+                                <i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i> Stocks Produits Restants
                             </h4>
                             <span class="text-[11px] text-slate-500">${productsList.length} articles</span>
                         </div>
@@ -348,7 +339,7 @@
                 container.innerHTML = `
                     <div class="flex justify-between items-center">
                         <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center">
-                            <i class="fa-solid fa-box text-emerald-500 mr-2"></i> Stocks Produits Restants
+                            <i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i> Stocks Produits Restants
                         </h4>
                         <span class="text-[11px] text-slate-500">${appState.catalog.filter(i=>i.type==='PRODUCT').length} articles</span>
                     </div>
@@ -361,199 +352,76 @@
                 return v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q) || (client.name && client.name.toLowerCase().includes(q));
             });
             container.innerHTML = `
-                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche véhicules</h4>
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche</h4>
                 ${renderVehicleList(filtered)}
             `;
         }
 
-        // --- SCANNER PRODUITS : caméra en direct + lecture du code-barres ---
-        let productCameraStream = null;
-        let productScanActive = false;
-        let productDetector = null;
-
-        function openProductScanner() {
-            if (document.getElementById('scanner-modal')) return;
-
+        // --- SCANNER UNIFIÉ (PLAQUE, CODE-BARRE & QR CODE) ---
+        function openUnifiedScanner() {
             const modal = document.createElement('div');
             modal.id = 'scanner-modal';
-            modal.className = 'fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-3 overflow-y-auto';
-            modal.innerHTML = `
-                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-barcode text-amber-500 mr-2"></i>Scanner un Produit / Pièce</h3>
-                        <button type="button" onclick="closeProductScanner()" class="text-slate-400 hover:text-white px-2" aria-label="Fermer"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <p id="product-camera-status" class="text-xs text-slate-300">Appuyez sur « Démarrer la caméra », puis présentez le code-barres devant l'objectif.</p>
-                    <div class="relative bg-black rounded-xl overflow-hidden border border-slate-700">
-                        <video id="product-camera-video" class="w-full max-h-64 object-contain" autoplay muted playsinline></video>
-                        <div class="absolute inset-x-6 top-1/2 border-t-2 border-amber-400 pointer-events-none"></div>
-                    </div>
-                    <button type="button" onclick="startProductCamera()" class="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs py-3 rounded-xl font-semibold">
-                        <i class="fa-solid fa-camera mr-2"></i>Démarrer la caméra
-                    </button>
-                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <label for="scan-product-input" class="text-xs text-slate-300 block">Ou saisir le code-barres manuellement :</label>
-                        <input id="scan-product-input" type="text" autocomplete="off" placeholder="Ex : BAR-FILTRE-HUILE / 123456789" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-amber-500 tracking-wider text-center">
-                        <button type="button" onclick="validateProductScan()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium">
-                            <i class="fa-solid fa-magnifying-glass mr-1.5"></i>Rechercher le produit
-                        </button>
-                    </div>
-                    <p class="text-[10px] text-slate-500">Caméra disponible en HTTPS (ou localhost), après autorisation du navigateur.</p>
-                </div>`;
-            document.body.appendChild(modal);
-        }
-
-        async function startProductCamera() {
-            const video = document.getElementById('product-camera-video');
-            const status = document.getElementById('product-camera-status');
-
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                status.textContent = "Caméra indisponible. Ouvrez l'application en HTTPS ou sur localhost.";
-                return;
-            }
-            if (!('BarcodeDetector' in window)) {
-                status.textContent = "Lecture automatique non prise en charge par ce navigateur. Utilisez la saisie manuelle ou un lecteur code-barres USB/Bluetooth.";
-                return;
-            }
-
-            try {
-                stopProductCamera();
-                const wantedFormats = ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'itf'];
-                const supported = await BarcodeDetector.getSupportedFormats();
-                const formats = wantedFormats.filter(f => supported.includes(f));
-                if (!formats.length) throw new Error("Aucun format de code-barres compatible.");
-                productDetector = new BarcodeDetector({ formats });
-
-                productCameraStream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-                });
-                video.srcObject = productCameraStream;
-                await video.play();
-                productScanActive = true;
-                status.textContent = "Caméra active — placez le code-barres dans le cadre.";
-
-                const scanFrame = async () => {
-                    if (!productScanActive || video.readyState < 2) return;
-                    try {
-                        const codes = await productDetector.detect(video);
-                        if (codes.length && codes[0].rawValue) {
-                            const field = document.getElementById('scan-product-input');
-                            if (field) field.value = codes[0].rawValue;
-                            stopProductCamera();
-                            validateProductScan();
-                            return;
-                        }
-                    } catch (err) {
-                        console.warn("Erreur de lecture du code-barres :", err);
-                    }
-                    if (productScanActive) setTimeout(scanFrame, 180);
-                };
-                scanFrame();
-            } catch (err) {
-                console.error("Erreur caméra :", err);
-                status.textContent = err.name === 'NotAllowedError'
-                    ? "Accès caméra refusé. Autorisez la caméra dans les paramètres du navigateur."
-                    : "Impossible d'ouvrir la caméra : " + (err.message || err.name);
-                stopProductCamera();
-            }
-        }
-
-        function stopProductCamera() {
-            productScanActive = false;
-            if (productCameraStream) {
-                productCameraStream.getTracks().forEach(track => track.stop());
-                productCameraStream = null;
-            }
-            const video = document.getElementById('product-camera-video');
-            if (video) video.srcObject = null;
-        }
-
-        function closeProductScanner() {
-            stopProductCamera();
-            const modal = document.getElementById('scanner-modal');
-            if (modal) modal.remove();
-        }
-
-        function validateProductScan() {
-            const input = document.getElementById('scan-product-input');
-            const val = (input ? input.value : '').trim().toUpperCase();
-            if (!val) {
-                alert("Veuillez scanner ou saisir un code produit.");
-                return;
-            }
-
-            const product = appState.catalog.find(c =>
-                c.type === 'PRODUCT' &&
-                ((c.barcode && String(c.barcode).trim().toUpperCase() === val) ||
-                 c.name.toUpperCase().includes(val))
-            );
-
-            if (product) {
-                closeProductScanner();
-                alert(`Produit trouvé !\nNom : ${product.name}\nStock restant : ${product.stock} unités\nPrix : ${product.price} DA`);
-            } else {
-                alert(`Aucun produit trouvé pour « ${val} ». Vérifiez le code-barres dans le catalogue administrateur.`);
-            }
-        }
-
-        // --- 2. SCANNER DE PLAQUES DÉDIÉ (Corrigé pour mobile) ---
-        function openPlateScanner() {
-            const modal = document.createElement('div');
-            modal.id = 'plate-scanner-modal';
             modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
             modal.innerHTML = `
                 <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
                     <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-car text-blue-500 mr-2"></i>Scanner une Plaque d'Immatriculation</h3>
-                        <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-qrcode text-blue-500 mr-2"></i>Scan Universel (Plaque, Barre & QR)</h3>
+                        <button onclick="closeUnifiedScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
                     </div>
 
                     <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <p class="text-xs text-slate-300">Scannez ou saisissez la plaque d'immatriculation du véhicule :</p>
+                        <p class="text-xs text-slate-300">Scannez ou saisissez un code-barre produit, un QR code, ou une plaque d'immatriculation :</p>
                         
-                        <input id="scan-plate-input" type="text" placeholder="Ex: 01234-116-15" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
+                        <input id="scan-code-result" type="text" placeholder="Ex: BAR-FILTRE-HUILE ou Plaque..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
 
-                        <div class="flex flex-col space-y-2 pt-1">
-                            <div class="relative w-full bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center shadow-md shadow-blue-600/30 overflow-hidden cursor-pointer">
-                                <span class="flex items-center justify-center pointer-events-none">
-                                    <i class="fa-solid fa-camera mr-2"></i> Prendre en photo la Plaque
-                                </span>
-                                <input type="file" id="plate-camera-file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onchange="processPlateCameraCapture(this)">
-                            </div>
-                            <button onclick="validatePlateScan()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
-                                <i class="fa-solid fa-check mr-1.5"></i> Valider Plaque
+                        <div class="flex space-x-2 pt-1">
+                            <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
+                                <i class="fa-solid fa-camera-retro mr-1.5"></i> Photo / Caméra
+                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processCapturedImageScan(this)">
+                            </label>
+                            <button onclick="validateScannedInput()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                                <i class="fa-solid fa-check mr-1.5"></i> Valider
                             </button>
                         </div>
                     </div>
+                    <p class="text-[11px] text-slate-500 text-center">Reconnaît automatiquement les articles du stock ou les véhicules du parc.</p>
                 </div>`;
             document.body.appendChild(modal);
-            setTimeout(() => { document.getElementById('scan-plate-input')?.focus(); }, 100);
+            setTimeout(() => { document.getElementById('scan-code-result')?.focus(); }, 100);
         }
 
-        function closePlateScanner() {
-            const m = document.getElementById('plate-scanner-modal');
+        function closeUnifiedScanner() {
+            const m = document.getElementById('scanner-modal');
             if (m) m.remove();
         }
 
-        function processPlateCameraCapture(input) {
+        function processCapturedImageScan(input) {
             const file = input.files && input.files[0];
             if (!file) return;
-            const inputField = document.getElementById('scan-plate-input');
+            const inputField = document.getElementById('scan-code-result');
             if(inputField) {
-                inputField.placeholder = "Photo de plaque enregistrée";
+                inputField.placeholder = "Code capturé par image";
             }
+            input.value = '';
         }
 
-        function validatePlateScan() {
-            const input = document.getElementById('scan-plate-input');
+        function validateScannedInput() {
+            const input = document.getElementById('scan-code-result');
             const val = (input ? input.value : '').trim().toUpperCase();
             if (!val) {
-                alert("Veuillez entrer ou scanner une plaque.");
+                alert("Veuillez entrer ou scanner un code.");
                 return;
             }
-            closePlateScanner();
+            closeUnifiedScanner();
 
+            // 1. Rechercher si c'est un produit ou code-barre/QR du catalogue
+            const product = appState.catalog.find(c => (c.barcode && c.barcode.toUpperCase() === val) || c.name.toUpperCase().includes(val));
+            if (product && product.type === 'PRODUCT') {
+                alert(`Produit identifié :\n• Nom : ${product.name}\n• Stock restant : ${product.stock}\n• Prix : ${product.price} DA`);
+                return;
+            }
+
+            // 2. Sinon, chercher ou créer comme plaque de véhicule
             const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
             const existingVeh = appState.vehicles.find(v => norm(v.plate) === norm(val));
             if (existingVeh) {
@@ -561,7 +429,7 @@
                 return;
             }
 
-            if (!confirm(`La plaque "${val}" n'est pas enregistrée. Créer un nouveau véhicule ?`)) return;
+            if (!confirm(`Le code/plaque "${val}" ne correspond à aucun produit ou véhicule existant. Créer un nouveau véhicule ?`)) return;
             
             const name = prompt("Nom complet du client :", "") || "Client " + val;
             const phone = prompt("Numéro de téléphone :", "+213 ") || "";
@@ -698,7 +566,7 @@
             `;
         }
 
-        // --- FACTURATION ---
+        // --- FACTURATION (SERVICES VS PRODUITS & DÉDUCTION STOCK) ---
         let billingCart = [];
         let billingVehicleId = null;
 
@@ -823,6 +691,7 @@
             const vehId = parseInt(document.getElementById('billing-veh-select').value);
             const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
+            // Déduire le stock des produits vendus
             billingCart.forEach(cartItem => {
                 if(cartItem.type === 'PRODUCT') {
                     const catItem = appState.catalog.find(c => c.id === cartItem.id);
@@ -875,7 +744,7 @@
             `;
         }
 
-        // --- ADMIN ---
+        // --- ADMIN : ÉQUIPE, SERVICES & PRODUITS ---
         function renderAdminView() {
             if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
             return `
@@ -894,6 +763,7 @@
 
         function setAdminTab(tab) { appState.adminTab = tab; renderApp(); }
 
+        // --- GESTION ÉQUIPE (MODIFIER, AJOUTER, SUPPRIMER, ACTIVER/DÉSACTIVER) ---
         function renderUsersAdminSection() {
             return `
                 <div class="space-y-4">
@@ -1000,6 +870,7 @@
             }
         }
 
+        // --- GESTION CATALOGUE (SERVICES SÉPARÉS DES PRODUITS & STOCKS) ---
         function renderCatalogAdminSection() {
             const services = appState.catalog.filter(i => i.type === 'SERVICE');
             const products = appState.catalog.filter(i => i.type === 'PRODUCT');
