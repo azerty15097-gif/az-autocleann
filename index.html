@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>AZ-LAVAGE • Gestion Station Lavage & Entretien</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet" />
   <script>
@@ -202,34 +204,6 @@
             <span>Se connecter</span>
           </button>
         </form>
-
-        <!-- Accès Démo Rapide 1-Clic -->
-        <div class="pt-3 border-t border-slate-800 space-y-2.5">
-          <p class="text-[10px] font-extrabold uppercase tracking-wider text-center text-slate-400">
-            <i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Connexion Rapide (Accès Démo 1-Clic)
-          </p>
-          <div class="grid grid-cols-2 gap-2.5">
-            <button type="button" onclick="quickDemoLogin('admin@az-lavage.dz', 'admin123')"
-              class="p-2.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-left transition active:scale-98">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-extrabold text-amber-400">👑 Admin</span>
-                <i class="fa-solid fa-arrow-right text-[10px] text-amber-400"></i>
-              </div>
-              <p class="text-[10px] text-slate-300 font-mono mt-1 truncate">admin@az-lavage.dz</p>
-              <p class="text-[9px] text-slate-400">Accès total & finances</p>
-            </button>
-
-            <button type="button" onclick="quickDemoLogin('karim@az-lavage.dz', 'lavage123')"
-              class="p-2.5 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-left transition active:scale-98">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-extrabold text-cyan-400">🧼 Lavagiste</span>
-                <i class="fa-solid fa-arrow-right text-[10px] text-cyan-400"></i>
-              </div>
-              <p class="text-[10px] text-slate-300 font-mono mt-1 truncate">karim@az-lavage.dz</p>
-              <p class="text-[9px] text-slate-400">Plaques, vidange & prix</p>
-            </button>
-          </div>
-        </div>
       </div>
 
       <!-- Pied de page Login -->
@@ -332,6 +306,9 @@
     const STORAGE_KEY = 'AZ_LAVAGE_DB_V2';
     const SESSION_KEY = 'AZ_LAVAGE_SESSION_V2';
     let activeMediaStream = null;
+    let barcodeScanInterval = null;
+    let zxingReader = null;
+    let isScanningPlateNow = false;
 
     // Dates utilitaires pour données réalistes (Aujourd'hui, Ce mois, Cette année)
     const now = new Date();
@@ -535,6 +512,173 @@
     };
 
     // État global de l'application
+    function loadDB() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return { ...DEFAULT_DB, ...parsed };
+        }
+      } catch (e) {}
+      return JSON.parse(JSON.stringify(DEFAULT_DB));
+    }
+
+    function saveDB() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (e) {}
+    }
+
+    function formatPrice(amount) {
+      return `${Number(amount || 0).toLocaleString('fr-FR')} ${db.currency || 'DA'}`;
+    }
+
+    function getActiveUser() {
+      return db.users.find(u => u.id === db.activeUserId) || db.users[0];
+    }
+
+    function isAdmin() {
+      const u = getActiveUser();
+      return u && u.role === 'admin';
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const colors = {
+        success: 'bg-emerald-600 text-white border-emerald-400/50',
+        error: 'bg-rose-600 text-white border-rose-400/50',
+        warning: 'bg-amber-500 text-slate-950 border-amber-300',
+        info: 'bg-slate-900 text-cyan-300 border-cyan-500/40'
+      };
+      const icons = {
+        success: 'fa-circle-check',
+        error: 'fa-circle-xmark',
+        warning: 'fa-triangle-exclamation',
+        info: 'fa-circle-info'
+      };
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto px-3.5 py-2.5 rounded-2xl border shadow-xl text-xs font-bold flex items-center gap-2 transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-8px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function openModal(title, htmlContent) {
+      const overlay = document.getElementById('modal-overlay');
+      const titleEl = document.getElementById('modal-title');
+      const bodyEl = document.getElementById('modal-body');
+      if (!overlay || !titleEl || !bodyEl) return;
+      titleEl.textContent = title;
+      bodyEl.innerHTML = htmlContent;
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+    }
+
+    function closeModal() {
+      const overlay = document.getElementById('modal-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      const icon = document.getElementById('theme-icon');
+      if (icon) {
+        icon.className = isDark ? 'fa-solid fa-sun text-xs' : 'fa-solid fa-moon text-xs';
+      }
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('login-password');
+      const icon = document.getElementById('login-eye-icon');
+      if (!input || !icon) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash text-xs';
+      } else {
+        input.type = 'password';
+        icon.className = 'fa-solid fa-eye text-xs';
+      }
+    }
+
+    function renderHeaderUserInfo() {
+      const u = getActiveUser();
+      if (!u) return;
+      const badge = document.getElementById('header-role-badge');
+      const subtitle = document.getElementById('header-user-subtitle');
+      const adminNav = document.getElementById('nav-admin-label');
+      if (badge) {
+        badge.textContent = u.role === 'admin' ? 'Admin' : 'Lavagiste';
+        badge.className = u.role === 'admin'
+          ? 'text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-amber-500/20 text-amber-500'
+          : 'text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-cyan-500/20 text-cyan-500';
+      }
+      if (subtitle) subtitle.textContent = u.name;
+      if (adminNav) adminNav.textContent = u.role === 'admin' ? 'Finances' : 'Profil';
+    }
+
+    function enterAuthenticatedApp(user) {
+      db.activeUserId = user.id;
+      saveDB();
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('authenticated-shell').classList.remove('hidden');
+      renderHeaderUserInfo();
+      navigate('scan-plate');
+    }
+
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      const idInput = document.getElementById('login-identifier').value.trim().toLowerCase();
+      const pwdInput = document.getElementById('login-password').value;
+      const remember = document.getElementById('login-remember').checked;
+      const errBox = document.getElementById('login-error-box');
+      const errText = document.getElementById('login-error-text');
+
+      const matched = db.users.find(u =>
+        (u.login.toLowerCase() === idInput || (u.phone && u.phone.replace(/\s+/g, '') === idInput.replace(/\s+/g, ''))) &&
+        u.password === pwdInput
+      );
+
+      if (!matched) {
+        if (errText) errText.textContent = 'Identifiant ou mot de passe incorrect.';
+        if (errBox) errBox.classList.remove('hidden');
+        return;
+      }
+
+      if (matched.active === false) {
+        if (errText) errText.textContent = 'Ce compte utilisateur est désactivé. Contactez l\'administrateur.';
+        if (errBox) errBox.classList.remove('hidden');
+        return;
+      }
+
+      if (errBox) errBox.classList.add('hidden');
+      if (remember) {
+        localStorage.setItem(SESSION_KEY, matched.id);
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+      }
+      showToast(`Bienvenue, ${matched.name}`, 'success');
+      enterAuthenticatedApp(matched);
+    }
+
+    function logoutUser() {
+      stopCameraStream();
+      localStorage.removeItem(SESSION_KEY);
+      db.activeUserId = null;
+      saveDB();
+      document.getElementById('authenticated-shell').classList.add('hidden');
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('login-password').value = '';
+      showToast('Session fermée avec succès', 'info');
+    }
+
     let db = loadDB();
     if (!db.activeQueue) db.activeQueue = DEFAULT_DB.activeQueue;
     let currentRoute = 'scan-plate';
@@ -544,223 +688,23 @@
     let searchCatalogQuery = '';
 
     // ============================================================================
-    // GESTION DU STOCKAGE, AUTHENTIFICATION & SESSION UTILISATEUR
-    // ============================================================================
-    function loadDB() {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error('Erreur lecture localStorage:', e);
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DB));
-      return JSON.parse(JSON.stringify(DEFAULT_DB));
-    }
-
-    function saveDB() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-      } catch (e) {
-        showToast('Erreur de sauvegarde locale', 'error');
-      }
-    }
-
-    function getActiveUser() {
-      if (!db.activeUserId) return null;
-      return db.users.find(u => u.id === db.activeUserId) || null;
-    }
-
-    function isAdmin() {
-      const u = getActiveUser();
-      return Boolean(u && u.role === 'admin');
-    }
-
-    function formatPrice(amount) {
-      return `${Number(amount).toLocaleString('fr-FR')} ${db.currency}`;
-    }
-
-    function togglePasswordVisibility() {
-      const input = document.getElementById('login-password');
-      const icon = document.getElementById('login-eye-icon');
-      if (!input || !icon) return;
-      if (input.type === 'password') {
-        input.type = 'text';
-        icon.className = 'fa-solid fa-eye-slash text-xs text-cyan-400';
-      } else {
-        input.type = 'password';
-        icon.className = 'fa-solid fa-eye text-xs';
-      }
-    }
-
-    function showLoginError(message) {
-      const box = document.getElementById('login-error-box');
-      const text = document.getElementById('login-error-text');
-      if (box && text) {
-        text.textContent = message;
-        box.classList.remove('hidden');
-      }
-    }
-
-    function hideLoginError() {
-      const box = document.getElementById('login-error-box');
-      if (box) box.classList.add('hidden');
-    }
-
-    function handleLoginSubmit(e) {
-      e.preventDefault();
-      hideLoginError();
-      const identifier = document.getElementById('login-identifier').value.trim().toLowerCase();
-      const password = document.getElementById('login-password').value;
-      const remember = document.getElementById('login-remember').checked;
-
-      authenticateCredentials(identifier, password, remember);
-    }
-
-    function quickDemoLogin(identifier, password) {
-      hideLoginError();
-      document.getElementById('login-identifier').value = identifier;
-      document.getElementById('login-password').value = password;
-      authenticateCredentials(identifier, password, true);
-    }
-
-    function authenticateCredentials(identifier, password, remember = true) {
-      const cleanId = identifier.trim().toLowerCase();
-      const matchedUser = db.users.find(u => {
-        const matchLogin = u.login && u.login.toLowerCase() === cleanId;
-        const matchPhone = u.phone && u.phone.replace(/\s+/g, '') === cleanId.replace(/\s+/g, '');
-        return (matchLogin || matchPhone) && u.password === password;
-      });
-
-      if (!matchedUser) {
-        showLoginError('Identifiant ou mot de passe incorrect. Vérifiez vos accès.');
-        return;
-      }
-
-      if (matchedUser.active === false) {
-        showLoginError('Ce compte utilisateur est désactivé. Contactez l\'administrateur.');
-        return;
-      }
-
-      db.activeUserId = matchedUser.id;
-      saveDB();
-
-      if (remember) {
-        localStorage.setItem(SESSION_KEY, matchedUser.id);
-      } else {
-        localStorage.removeItem(SESSION_KEY);
-      }
-
-      enterAuthenticatedApp(matchedUser);
-      showToast(`Bienvenue ${matchedUser.name} !`, 'success');
-    }
-
-    function enterAuthenticatedApp(user) {
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('authenticated-shell').classList.remove('hidden');
-      renderHeaderUserInfo();
-      navigate('scan-plate');
-    }
-
-    function logoutUser() {
-      stopCameraStream();
-      closeModal();
-      db.activeUserId = null;
-      localStorage.removeItem(SESSION_KEY);
-      saveDB();
-
-      document.getElementById('authenticated-shell').classList.add('hidden');
-      document.getElementById('login-screen').classList.remove('hidden');
-      document.getElementById('login-password').value = '';
-      hideLoginError();
-      showToast('Session fermée. Vous êtes déconnecté.', 'info');
-    }
-
-    function renderHeaderUserInfo() {
-      const user = getActiveUser();
-      if (!user) return;
-
-      const roleBadge = document.getElementById('header-role-badge');
-      const subtitle = document.getElementById('header-user-subtitle');
-      const adminLabel = document.getElementById('nav-admin-label');
-
-      if (user.role === 'admin') {
-        roleBadge.textContent = '👑 Admin';
-        roleBadge.className = 'text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-amber-500/20 text-amber-500';
-        subtitle.textContent = user.name;
-        adminLabel.textContent = 'Admin/Fin.';
-      } else {
-        roleBadge.textContent = '🧼 Lavagiste';
-        roleBadge.className = 'text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-cyan-500/20 text-cyan-500';
-        subtitle.textContent = user.name;
-        adminLabel.textContent = 'Mon Profil';
-      }
-    }
-
-    function toggleTheme() {
-      const html = document.documentElement;
-      const icon = document.getElementById('theme-icon');
-      if (html.classList.contains('dark')) {
-        html.classList.remove('dark');
-        icon.className = 'fa-solid fa-moon text-xs';
-      } else {
-        html.classList.add('dark');
-        icon.className = 'fa-solid fa-sun text-xs';
-      }
-    }
-
-    // ============================================================================
-    // SYSTEME DE NOTIFICATION & MODALE
-    // ============================================================================
-    function showToast(message, type = 'success') {
-      const container = document.getElementById('toast-container');
-      const colors = {
-        success: 'bg-emerald-600 text-white border-emerald-400/40',
-        error: 'bg-rose-600 text-white border-rose-400/40',
-        info: 'bg-slate-900 dark:bg-cyan-950 text-cyan-100 border-cyan-500/40',
-        warning: 'bg-amber-500 text-slate-950 border-amber-300'
-      };
-      const icons = {
-        success: 'fa-circle-check',
-        error: 'fa-circle-exclamation',
-        info: 'fa-circle-info',
-        warning: 'fa-triangle-exclamation'
-      };
-      const el = document.createElement('div');
-      el.className = `px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 transform translate-y-0 opacity-100 ${colors[type] || colors.info}`;
-      el.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm"></i><span class="flex-1">${message}</span>`;
-      container.appendChild(el);
-      setTimeout(() => {
-        el.style.opacity = '0';
-        el.style.transform = 'translateY(-10px)';
-        setTimeout(() => el.remove(), 300);
-      }, 3200);
-    }
-
-    function openModal(title, htmlContent) {
-      document.getElementById('modal-title').innerHTML = title;
-      document.getElementById('modal-body').innerHTML = htmlContent;
-      const overlay = document.getElementById('modal-overlay');
-      overlay.classList.remove('hidden');
-      overlay.classList.add('flex');
-    }
-
-    function closeModal() {
-      const overlay = document.getElementById('modal-overlay');
-      overlay.classList.add('hidden');
-      overlay.classList.remove('flex');
-    }
-
-    // ============================================================================
-    // GESTION CAMÉRA WEB (getUserMedia) & ARRÊT PROPRE
+    // GESTION CAMÉRA WEB (getUserMedia), DÉTECTION CODES-BARRES/QR & OCR PLAQUES
     // ============================================================================
     function stopCameraStream() {
+      if (barcodeScanInterval) {
+        clearInterval(barcodeScanInterval);
+        barcodeScanInterval = null;
+      }
+      if (zxingReader) {
+        try { zxingReader.reset(); } catch (e) {}
+      }
       if (activeMediaStream) {
         activeMediaStream.getTracks().forEach(track => track.stop());
         activeMediaStream = null;
       }
     }
 
-    async function startCameraInElement(videoElementId, fallbackOverlayId) {
+    async function startCameraInElement(videoElementId, fallbackOverlayId, mode = 'plate') {
       stopCameraStream();
       const videoEl = document.getElementById(videoElementId);
       const fallbackEl = document.getElementById(fallbackOverlayId);
@@ -774,7 +718,11 @@
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
           audio: false
         });
         activeMediaStream = stream;
@@ -782,13 +730,21 @@
         await videoEl.play();
         if (fallbackEl) fallbackEl.classList.add('hidden');
         
-        const stopBtn = document.getElementById('btn-stop-plate-cam');
-        if (stopBtn) stopBtn.classList.remove('hidden');
-        showToast('Caméra activée', 'info');
+        if (mode === 'plate') {
+          const stopBtn = document.getElementById('btn-stop-plate-cam');
+          const captureBtn = document.getElementById('btn-capture-plate-ocr');
+          if (stopBtn) stopBtn.classList.remove('hidden');
+          if (captureBtn) captureBtn.classList.remove('hidden');
+          showToast('Caméra prête : cadrez la plaque et appuyez sur "Capturer Plaque"', 'info');
+        } else if (mode === 'barcode') {
+          const stopBarcodeBtn = document.getElementById('btn-stop-barcode-cam');
+          if (stopBarcodeBtn) stopBarcodeBtn.classList.remove('hidden');
+          showToast('Lecteur actif : présentez un code-barres ou QR Code', 'info');
+          startContinuousBarcodeDetection(videoEl);
+        }
       } catch (err) {
-        // Caméra indisponible ou permission refusée -> mode simulation actif
         if (fallbackEl) fallbackEl.classList.remove('hidden');
-        showToast('Accès caméra refusé ou indisponible', 'warning');
+        showToast('Accès caméra refusé ou indisponible (vérifiez HTTPS/permissions)', 'warning');
       }
     }
 
@@ -796,9 +752,159 @@
       stopCameraStream();
       const fallbackEl = document.getElementById('plate-camera-fallback');
       const stopBtn = document.getElementById('btn-stop-plate-cam');
+      const captureBtn = document.getElementById('btn-capture-plate-ocr');
       if (fallbackEl) fallbackEl.classList.remove('hidden');
       if (stopBtn) stopBtn.classList.add('hidden');
+      if (captureBtn) captureBtn.classList.add('hidden');
       showToast('Caméra coupée', 'info');
+    }
+
+    function stopBarcodeCameraUI() {
+      stopCameraStream();
+      const fallbackEl = document.getElementById('barcode-camera-fallback');
+      const stopBtn = document.getElementById('btn-stop-barcode-cam');
+      if (fallbackEl) fallbackEl.classList.remove('hidden');
+      if (stopBtn) stopBtn.classList.add('hidden');
+      showToast('Lecteur caméra arrêté', 'info');
+    }
+
+    // Lecture réelle en temps réel des Codes-Barres (EAN-13, Code-128, etc.) et QR Codes
+    function startContinuousBarcodeDetection(videoEl) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // 1. Utiliser l'API native BarcodeDetector si supportée par le navigateur mobile
+      let nativeDetector = null;
+      if ('BarcodeDetector' in window) {
+        try {
+          nativeDetector = new window.BarcodeDetector({
+            formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf']
+          });
+        } catch (e) {
+          nativeDetector = null;
+        }
+      }
+
+      // 2. Fallback universel multi-format ZXing (fonctionne sur iOS Safari, Firefox, Chrome)
+      if (!nativeDetector && window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+        try {
+          zxingReader = new window.ZXing.BrowserMultiFormatReader();
+        } catch (e) {
+          zxingReader = null;
+        }
+      }
+
+      let isBusy = false;
+      barcodeScanInterval = setInterval(async () => {
+        if (!activeMediaStream || isBusy || videoEl.readyState < 2) return;
+        isBusy = true;
+
+        try {
+          let detectedValue = null;
+
+          if (nativeDetector) {
+            const barcodes = await nativeDetector.detect(videoEl);
+            if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+              detectedValue = barcodes[0].rawValue.trim();
+            }
+          } else if (zxingReader) {
+            canvas.width = videoEl.videoWidth || 640;
+            canvas.height = videoEl.videoHeight || 480;
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            try {
+              const luminanceSource = new window.ZXing.HTMLCanvasElementLuminanceSource(canvas);
+              const binaryBitmap = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(luminanceSource));
+              const result = zxingReader.decodeBitmap(binaryBitmap);
+              if (result && result.getText()) {
+                detectedValue = result.getText().trim();
+              }
+            } catch (notFoundErr) {
+              // Aucun code dans cette frame, continuer
+            }
+          }
+
+          if (detectedValue) {
+            stopBarcodeCameraUI();
+            if (navigator.vibrate) navigator.vibrate(120);
+            showToast(`Code capté : ${detectedValue}`, 'success');
+            processScannedBarcode(detectedValue);
+          }
+        } catch (err) {
+          // Ignorer les erreurs ponctuelles d'analyse de frame
+        } finally {
+          isBusy = false;
+        }
+      }, 350);
+    }
+
+    // Capture réelle & lecture OCR d'une plaque d'immatriculation via Tesseract.js
+    async function captureAndReadPlateOCR() {
+      const videoEl = document.getElementById('plate-camera-video');
+      const statusBadge = document.getElementById('plate-ocr-status');
+      if (!videoEl || !activeMediaStream || videoEl.readyState < 2) {
+        showToast('Activez d\'abord la caméra pour lire une plaque', 'warning');
+        return;
+      }
+      if (isScanningPlateNow) return;
+      isScanningPlateNow = true;
+
+      if (statusBadge) {
+        statusBadge.textContent = 'Analyse OCR en cours...';
+        statusBadge.classList.remove('hidden');
+      }
+
+      try {
+        const vw = videoEl.videoWidth;
+        const vh = videoEl.videoHeight;
+
+        // Recadrer sur la zone centrale du viseur pour maximiser la précision OCR
+        const cropW = Math.floor(vw * 0.78);
+        const cropH = Math.floor(vh * 0.45);
+        const cropX = Math.floor((vw - cropW) / 2);
+        const cropY = Math.floor((vh - cropH) / 2);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = cropW;
+        canvas.height = cropH;
+        const ctx = canvas.getContext('2d');
+        ctx.filter = 'contrast(145%) grayscale(100%)';
+        ctx.drawImage(videoEl, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        if (!window.Tesseract) {
+          throw new Error('Moteur OCR non chargé');
+        }
+
+        const { data: { text } } = await window.Tesseract.recognize(canvas, 'eng', {
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- '
+        });
+
+        const cleanedLines = (text || '')
+          .toUpperCase()
+          .replace(/[^A-Z0-9-\s]/g, '')
+          .split(/\n+/)
+          .map(l => l.trim().replace(/\s+/g, '-'))
+          .filter(l => l.length >= 5);
+
+        // Rechercher un motif de plaque DZ (ex: 00482-123-16), EU (ex: AB-458-CD) ou suite alphanumérique
+        let extractedPlate = cleanedLines.find(l => /\d{4,6}-\d{3}-\d{2}/.test(l) || /[A-Z]{2}-\d{3}-[A-Z]{2}/.test(l));
+        if (!extractedPlate && cleanedLines.length > 0) {
+          extractedPlate = cleanedLines.sort((a, b) => b.length - a.length)[0];
+        }
+
+        if (extractedPlate && extractedPlate.length >= 5) {
+          if (navigator.vibrate) navigator.vibrate(120);
+          stopPlateCameraUI();
+          showToast(`Plaque lue par caméra : ${extractedPlate}`, 'success');
+          processScannedPlate(extractedPlate);
+        } else {
+          showToast('Plaque illisible : rapprochez la caméra et réessayez', 'warning');
+        }
+      } catch (err) {
+        showToast('Erreur lecture caméra : utilisez la saisie manuelle ou rapprochez la plaque', 'error');
+      } finally {
+        isScanningPlateNow = false;
+        if (statusBadge) statusBadge.classList.add('hidden');
+      }
     }
 
     // ============================================================================
@@ -942,13 +1048,24 @@
           </div>
 
           <!-- Zone Vidéo / Simulation Caméra -->
-          <div class="relative h-48 bg-slate-950 flex items-center justify-center overflow-hidden">
-            <video id="plate-camera-video" class="w-full h-full object-cover opacity-80" playsinline muted></video>
+          <div class="relative h-52 bg-slate-950 flex items-center justify-center overflow-hidden">
+            <video id="plate-camera-video" class="w-full h-full object-cover" playsinline muted></video>
             
+            <!-- Badge état OCR en cours -->
+            <div id="plate-ocr-status" class="hidden absolute top-2.5 left-2.5 z-20 px-2.5 py-1 rounded-lg bg-cyan-600/95 text-white text-[10px] font-extrabold shadow animate-pulse">
+              Analyse OCR en cours...
+            </div>
+
             <!-- Bouton flottant pour couper la caméra lorsqu'elle est active -->
             <button id="btn-stop-plate-cam" onclick="stopPlateCameraUI()" class="hidden absolute top-2.5 right-2.5 z-20 px-2.5 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-[10px] font-bold shadow flex items-center gap-1">
               <i class="fa-solid fa-video-slash"></i>
               <span>Couper cam</span>
+            </button>
+
+            <!-- Bouton flottant Capturer la Plaque en direct lorsque la caméra tourne -->
+            <button id="btn-capture-plate-ocr" onclick="captureAndReadPlateOCR()" class="hidden absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold shadow-xl flex items-center gap-1.5 active:scale-95 transition">
+              <i class="fa-solid fa-camera"></i>
+              <span>Capturer & Lire la Plaque</span>
             </button>
 
             <!-- État initial : Caméra en veille jusqu'au clic -->
@@ -957,29 +1074,29 @@
                 <i class="fa-solid fa-camera text-xl text-cyan-400"></i>
               </div>
               <p class="text-xs text-slate-200 font-bold">Caméra en veille (économie d'énergie)</p>
-              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour ouvrir la caméra ou simuler un scan</p>
-              <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
+              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour ouvrir la caméra et lire une plaque</p>
+              <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback', 'plate')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
                 <i class="fa-solid fa-video"></i>
                 <span>Activer la caméra</span>
               </button>
             </div>
 
             <!-- Cadre de ciblage plaque -->
-            <div class="absolute inset-x-8 inset-y-10 border-2 border-cyan-400/40 rounded-xl pointer-events-none flex items-center justify-center">
+            <div class="absolute inset-x-8 inset-y-10 border-2 border-cyan-400/60 rounded-xl pointer-events-none flex items-center justify-center">
               <div class="scanner-laser"></div>
             </div>
           </div>
 
-          <!-- Boutons de simulation OCR instantanée -->
+          <!-- Boutons de capture & simulation OCR instantanée -->
           <div class="p-3.5 bg-slate-100/70 dark:bg-slate-900/80 space-y-2.5">
             <div class="flex items-center justify-between gap-2">
-              <button onclick="simulatePlateScan()" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
-                <i class="fa-solid fa-expand"></i>
-                <span>Simuler Scan Plaque OCR</span>
+              <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback', 'plate')" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
+                <i class="fa-solid fa-camera"></i>
+                <span>Scanner avec Caméra</span>
               </button>
-              <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback')" title="Activer la caméra" class="py-2.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5">
-                <i class="fa-solid fa-video text-cyan-500"></i>
-                <span>Caméra</span>
+              <button onclick="simulatePlateScan()" title="Simuler un scan sans caméra" class="py-2.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-wand-magic-sparkles text-cyan-500"></i>
+                <span>Démo OCR</span>
               </button>
             </div>
 
@@ -1655,30 +1772,42 @@
           </div>
         <!-- Caméra Scanner Code-Barres / QR (En veille au démarrage) -->
         <div class="bg-white dark:bg-slateDark-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg">
-          <div class="relative h-52 bg-slate-950 flex items-center justify-center overflow-hidden">
-            <video id="barcode-camera-video" class="w-full h-full object-cover opacity-80" playsinline muted></video>
+          <div class="relative h-56 bg-slate-950 flex items-center justify-center overflow-hidden">
+            <video id="barcode-camera-video" class="w-full h-full object-cover" playsinline muted></video>
             
+            <!-- Bouton flottant couper caméra -->
+            <button id="btn-stop-barcode-cam" onclick="stopBarcodeCameraUI()" class="hidden absolute top-2.5 right-2.5 z-20 px-2.5 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-[10px] font-bold shadow flex items-center gap-1">
+              <i class="fa-solid fa-video-slash"></i>
+              <span>Couper cam</span>
+            </button>
+
             <div id="barcode-camera-fallback" class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 flex flex-col items-center justify-center p-4 text-center z-10">
               <i class="fa-solid fa-qrcode text-4xl text-cyan-400/75 mb-2"></i>
               <p class="text-xs text-slate-200 font-bold">Lecteur Code-Barres & QR en veille</p>
-              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour activer la caméra</p>
-              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition">
+              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Détection automatique EAN-13, Code-128 & QR Code</p>
+              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback', 'barcode')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition">
                 <i class="fa-solid fa-video"></i>
                 <span>Activer la caméra</span>
               </button>
             </div>
 
             <!-- Viseur carré QR/Barcode -->
-            <div class="w-48 h-32 border-2 border-cyan-400/40 rounded-2xl relative pointer-events-none flex items-center justify-center">
+            <div class="w-52 h-36 border-2 border-cyan-400/60 rounded-2xl relative pointer-events-none flex items-center justify-center">
               <div class="scanner-laser"></div>
             </div>
           </div>
 
           <div class="p-4 space-y-3">
-            <button onclick="simulateBarcodeScan()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
-              <i class="fa-solid fa-barcode text-base"></i>
-              <span>Simuler Scan Code-Barres / QR</span>
-            </button>
+            <div class="flex gap-2">
+              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback', 'barcode')" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
+                <i class="fa-solid fa-camera text-sm"></i>
+                <span>Scanner Code-Barres / QR</span>
+              </button>
+              <button onclick="simulateBarcodeScan()" class="py-3 px-3.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-wand-magic-sparkles text-cyan-500"></i>
+                <span>Démo</span>
+              </button>
+            </div>
 
             <!-- Saisie manuelle d'un code -->
             <form onsubmit="handleManualBarcodeSubmit(event)" class="flex gap-2">
