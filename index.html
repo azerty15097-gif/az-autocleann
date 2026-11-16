@@ -1075,7 +1075,7 @@
     }
 
     // ============================================================================
-    // VUE 1 : ACCUEIL & SCANNER DE PLAQUES D'IMMATRICULATION (CAMÉRA EN VEILLE)
+    // VUE 1 : ACCUEIL & SCANNER DE PLAQUES D'IMMATRICULATION
     // ============================================================================
     function renderScanPlateView(container) {
       const todayIncome = db.transactions
@@ -1151,7 +1151,7 @@
           `}
         </div>
 
-        <!-- Module Scanner de Plaque (Caméra en veille au démarrage) -->
+        <!-- Module Scanner de Plaque -->
         <div class="bg-white dark:bg-slateDark-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg">
           <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -1182,13 +1182,13 @@
               <span>Capturer & Lire la Plaque</span>
             </button>
 
-            <!-- État initial : Caméra en veille jusqu'au clic -->
+            <!-- État initial : jusqu'au clic -->
             <div id="plate-camera-fallback" class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950 flex flex-col items-center justify-center p-4 text-center z-10">
               <div class="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-2">
                 <i class="fa-solid fa-camera text-xl text-cyan-400"></i>
               </div>
-              <p class="text-xs text-slate-200 font-bold">Caméra en veille (économie d'énergie)</p>
-              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour ouvrir la caméra et lire une plaque</p>
+              <p class="text-xs text-slate-200 font-bold">Scanner avec Caméra</p>
+              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour ouvrir la caméra et scanner une plaque</p>
               <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback', 'plate')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
                 <i class="fa-solid fa-video"></i>
                 <span>Activer la caméra</span>
