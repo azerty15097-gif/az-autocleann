@@ -785,10 +785,14 @@
         }
       }
 
-      // 2. Fallback universel multi-format ZXing (fonctionne sur iOS Safari, Firefox, Chrome)
+      // 2. Fallback universel multi-format ZXing avec hints haute précision
       if (!nativeDetector && window.ZXing && window.ZXing.BrowserMultiFormatReader) {
         try {
-          zxingReader = new window.ZXing.BrowserMultiFormatReader();
+          const hints = new Map();
+          if (window.ZXing.DecodeHintType && window.ZXing.DecodeHintType.TRY_HARDER) {
+            hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+          }
+          zxingReader = new window.ZXing.BrowserMultiFormatReader(hints);
         } catch (e) {
           zxingReader = null;
         }
@@ -807,10 +811,14 @@
             if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
               detectedValue = barcodes[0].rawValue.trim();
             }
-          } else if (zxingReader) {
-            canvas.width = videoEl.videoWidth || 640;
-            canvas.height = videoEl.videoHeight || 480;
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          }
+
+          if (!detectedValue && zxingReader) {
+            const vw = videoEl.videoWidth || 640;
+            const vh = videoEl.videoHeight || 480;
+            canvas.width = vw;
+            canvas.height = vh;
+            ctx.drawImage(videoEl, 0, 0, vw, vh);
             try {
               const luminanceSource = new window.ZXing.HTMLCanvasElementLuminanceSource(canvas);
               const binaryBitmap = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(luminanceSource));
@@ -834,7 +842,51 @@
         } finally {
           isBusy = false;
         }
-      }, 350);
+      }, 280);
+    }
+
+    // Capture manuelle instantanée d'une image de code-barres / QR si la détection auto tarde
+    async function captureBarcodeSnapshot() {
+      const videoEl = document.getElementById('barcode-camera-video');
+      if (!videoEl || !activeMediaStream || videoEl.readyState < 2) {
+        showToast('Activez d\'abord la caméra du scanner', 'warning');
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = videoEl.videoWidth || 640;
+      canvas.height = videoEl.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.filter = 'contrast(135%)';
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+      let found = null;
+      if ('BarcodeDetector' in window) {
+        try {
+          const detector = new window.BarcodeDetector();
+          const res = await detector.detect(canvas);
+          if (res && res.length > 0) found = res[0].rawValue.trim();
+        } catch (e) {}
+      }
+
+      if (!found && window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+        try {
+          const reader = new window.ZXing.BrowserMultiFormatReader();
+          const lum = new window.ZXing.HTMLCanvasElementLuminanceSource(canvas);
+          const bmp = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
+          const res = reader.decodeBitmap(bmp);
+          if (res && res.getText()) found = res.getText().trim();
+        } catch (e) {}
+      }
+
+      if (found) {
+        stopBarcodeCameraUI();
+        if (navigator.vibrate) navigator.vibrate(120);
+        showToast(`Code capté : ${found}`, 'success');
+        processScannedBarcode(found);
+      } else {
+        showToast('Aucun code détecté : centrez bien le code-barres ou QR dans le cadre', 'warning');
+      }
     }
 
     // Capture réelle & lecture OCR d'une plaque d'immatriculation via Tesseract.js
@@ -1089,14 +1141,10 @@
 
           <!-- Boutons de capture & simulation OCR instantanée -->
           <div class="p-3.5 bg-slate-100/70 dark:bg-slate-900/80 space-y-2.5">
-            <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
               <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback', 'plate')" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
                 <i class="fa-solid fa-camera"></i>
                 <span>Scanner avec Caméra</span>
-              </button>
-              <button onclick="simulatePlateScan()" title="Simuler un scan sans caméra" class="py-2.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5">
-                <i class="fa-solid fa-wand-magic-sparkles text-cyan-500"></i>
-                <span>Démo OCR</span>
               </button>
             </div>
 
@@ -1216,19 +1264,6 @@
       db.activeQueue = db.activeQueue.filter(item => item.id !== queueId);
       saveDB();
       renderCurrentRoute();
-    }
-
-    function simulatePlateScan() {
-      const samplePlates = [
-        '00482-123-16',
-        'AB-458-CD',
-        '12940-121-31',
-        '09841-126-16', // Nouveau client DZ
-        'GH-892-TY'     // Nouveau client EU
-      ];
-      const randomPlate = samplePlates[Math.floor(Math.random() * samplePlates.length)];
-      showToast(`Plaque détectée par OCR : ${randomPlate}`, 'info');
-      processScannedPlate(randomPlate);
     }
 
     function handleManualPlateSubmit(e) {
@@ -1770,9 +1805,19 @@
                 : 'Scannez un produit en rayon pour afficher instantanément son prix de vente.'}
             </p>
           </div>
+        </div>
+
         <!-- Caméra Scanner Code-Barres / QR (En veille au démarrage) -->
         <div class="bg-white dark:bg-slateDark-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg">
-          <div class="relative h-56 bg-slate-950 flex items-center justify-center overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+              <h2 class="text-xs font-extrabold uppercase tracking-wider">Scanner Produit (Code-Barres / QR)</h2>
+            </div>
+            <span class="text-[10px] font-bold text-slate-400">EAN-13 • QR</span>
+          </div>
+
+          <div class="relative h-60 bg-slate-950 flex items-center justify-center overflow-hidden">
             <video id="barcode-camera-video" class="w-full h-full object-cover" playsinline muted></video>
             
             <!-- Bouton flottant couper caméra -->
@@ -1781,27 +1826,35 @@
               <span>Couper cam</span>
             </button>
 
+            <!-- Bouton flottant capture photo directe du code -->
+            <button onclick="captureBarcodeSnapshot()" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-xl bg-emerald-500/95 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold shadow-lg flex items-center gap-1.5 active:scale-95 transition">
+              <i class="fa-solid fa-expand"></i>
+              <span>Capturer le code</span>
+            </button>
+
             <div id="barcode-camera-fallback" class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 flex flex-col items-center justify-center p-4 text-center z-10">
-              <i class="fa-solid fa-qrcode text-4xl text-cyan-400/75 mb-2"></i>
+              <div class="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-2">
+                <i class="fa-solid fa-qrcode text-2xl text-cyan-400"></i>
+              </div>
               <p class="text-xs text-slate-200 font-bold">Lecteur Code-Barres & QR en veille</p>
-              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Détection automatique EAN-13, Code-128 & QR Code</p>
-              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback', 'barcode')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition">
+              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour scanner un bidon d'huile ou un filtre</p>
+              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback', 'barcode')" class="px-4 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
                 <i class="fa-solid fa-video"></i>
                 <span>Activer la caméra</span>
               </button>
             </div>
 
             <!-- Viseur carré QR/Barcode -->
-            <div class="w-52 h-36 border-2 border-cyan-400/60 rounded-2xl relative pointer-events-none flex items-center justify-center">
+            <div class="w-56 h-36 border-2 border-cyan-400/70 rounded-2xl relative pointer-events-none flex items-center justify-center">
               <div class="scanner-laser"></div>
             </div>
           </div>
 
           <div class="p-4 space-y-3">
             <div class="flex gap-2">
-              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback', 'barcode')" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
+              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback', 'barcode')" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
                 <i class="fa-solid fa-camera text-sm"></i>
-                <span>Scanner Code-Barres / QR</span>
+                <span>Scanner avec Caméra</span>
               </button>
               <button onclick="simulateBarcodeScan()" class="py-3 px-3.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-wand-magic-sparkles text-cyan-500"></i>
@@ -1812,9 +1865,9 @@
             <!-- Saisie manuelle d'un code -->
             <form onsubmit="handleManualBarcodeSubmit(event)" class="flex gap-2">
               <input id="manual-barcode-input" type="text" placeholder="Saisir code-barres (ex: 6130001122334)" required
-                class="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs focus:outline-none focus:border-cyan-500" />
-              <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-bold text-xs">
-                Scanner
+                class="flex-1 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs focus:outline-none focus:border-cyan-500" />
+              <button type="submit" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-cyan-600 text-white font-bold text-xs">
+                Vérifier
               </button>
             </form>
 
@@ -1915,7 +1968,7 @@
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-lg font-extrabold">Services, Produits & Huiles</h2>
-            <p class="text-xs text-slate-400">Tarifs lavage, filtres et lubrifiants moteur</p>
+            <p class="text-xs text-slate-400">Tarifs lavage, filtres et stock en temps réel</p>
           </div>
           ${adminMode ? `
             <button onclick="openProductFormModal()" class="px-3.5 py-2 rounded-xl bg-cyan-600 text-white font-bold text-xs shadow-md shadow-cyan-600/20">
@@ -1947,24 +2000,24 @@
             class="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slateDark-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-cyan-500" />
         </div>
 
-        <!-- Grille / Liste des articles -->
+        <!-- Grille / Liste des articles avec Quantité Restante -->
         <div class="space-y-2.5">
           ${filteredItems.map(item => {
             const isOil = item.category === 'oil';
             const isService = item.category === 'service';
             const badgeColor = isOil ? 'bg-amber-500/15 text-amber-500' : isService ? 'bg-cyan-500/15 text-cyan-500' : 'bg-purple-500/15 text-purple-400';
             const icon = isOil ? 'fa-oil-can' : isService ? 'fa-soap' : 'fa-filter';
+            const isLowStock = !isService && item.stock <= 10;
+            const isOutStock = !isService && item.stock === 0;
 
             return `
-              <div class="bg-white dark:bg-slateDark-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+              <div class="bg-white dark:bg-slateDark-900 p-3.5 rounded-2xl border ${isLowStock ? 'border-amber-500/40 dark:border-amber-500/40' : 'border-slate-200 dark:border-slate-800'} flex items-center justify-between gap-3">
                 <div class="flex items-start gap-3 min-w-0">
                   <div class="w-10 h-10 rounded-xl ${badgeColor} flex items-center justify-center shrink-0 mt-0.5">
                     <i class="fa-solid ${icon}"></i>
                   </div>
                   <div class="min-w-0">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                      <h4 class="font-bold text-xs truncate">${item.name}</h4>
-                    </div>
+                    <h4 class="font-bold text-xs truncate">${item.name}</h4>
                     ${isOil ? `
                       <div class="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">${item.viscosity}</span>
@@ -1973,11 +2026,17 @@
                     ` : `
                       <p class="text-[10px] text-slate-400 mt-0.5 font-mono">Code: ${item.barcode}</p>
                     `}
-                    ${!isService ? `
-                      <p class="text-[10px] mt-1 ${item.stock <= 12 ? 'text-rose-500 font-bold' : 'text-slate-400'}">
-                        Stock : ${item.stock} ${item.unit || 'unités'} ${item.stock <= 12 ? '⚠️ Bas' : ''}
-                      </p>
-                    ` : ''}
+                    
+                    <!-- Affichage de la quantité restante avec badge couleur -->
+                    <div class="mt-1.5 flex items-center gap-1.5">
+                      ${isService ? `
+                        <span class="text-[10px] font-semibold text-cyan-500">Service permanent</span>
+                      ` : `
+                        <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${isOutStock ? 'bg-rose-500/20 text-rose-400' : isLowStock ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'}">
+                          <i class="fa-solid fa-boxes-stacked mr-1"></i> Restant : ${item.stock} ${item.unit || 'unités'}
+                        </span>
+                      `}
+                    </div>
                   </div>
                 </div>
 
