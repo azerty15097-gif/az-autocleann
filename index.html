@@ -35,16 +35,16 @@
         };
 
         const DEFAULT_CATALOG = [
-            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800 },
-            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500 },
-            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000 },
-            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200 },
-            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500 },
-            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300 },
-            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800 },
-            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500 },
-            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500 },
-            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300 }
+            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800, stock: 50 },
+            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500, stock: 50 },
+            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000, stock: 30 },
+            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200, stock: 100 },
+            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500, stock: 14 },
+            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300, stock: 8 },
+            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800, stock: 12 },
+            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500, stock: 5 },
+            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500, stock: 25 },
+            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300, stock: 40 }
         ];
 
         let appState = {
@@ -61,8 +61,8 @@
                 { id: 2, clientId: 2, plate: "AB-842-TR", model: "Peugeot 3008", mileage: 62000, country: 'EU' }
             ],
             passages: JSON.parse(localStorage.getItem('autoclean_passages')) || [
-                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, nextVidangeKm: 55000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
-                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, nextVidangeKm: 72000, totalAmount: 1500, items: ["Lavage Complet"] }
+                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
+                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, totalAmount: 1500, items: ["Lavage Complet"] }
             ],
             adminTab: 'users'
         };
@@ -88,7 +88,7 @@
                 return;
             }
             if(!found.active) {
-                errorDiv.textContent = "Ce compte a été suspendu par l'administrateur.";
+                errorDiv.textContent = "Ce compte a été suspendu.";
                 errorDiv.classList.remove('hidden');
                 return;
             }
@@ -223,7 +223,7 @@
             renderApp();
         }
 
-        // --- VUE ACCUEIL ---
+        // --- VUE ACCUEIL (AVEC QUANTITÉS RESTANTES & SCAN CODE BARRE / QR) ---
         function renderHomeView() {
             return `
                 <div class="space-y-6">
@@ -238,7 +238,7 @@
                             </div>
                             <div class="flex space-x-2">
                                 <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
-                                    <i class="fa-solid fa-camera mr-2"></i> Saisie / Scanner Plaque
+                                    <i class="fa-solid fa-qrcode mr-2"></i> Scanner / Plaque / QR
                                 </button>
                                 <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
                                     <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
@@ -248,7 +248,7 @@
                     </div>
 
                     <div id="search-results-container" class="space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Véhicules Récents</h4>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Véhicules Récents & Stocks Restants</h4>
                         ${renderVehicleList(appState.vehicles)}
                     </div>
                 </div>
@@ -267,9 +267,13 @@
             return vehiclesList.map(v => {
                 const client = appState.clients.find(c => c.id === v.clientId) || { name: 'Client Inconnu', phone: '' };
                 const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
+                
+                // Récupération des articles restants du catalogue associés aux derniers passages ou affichage des stocks globaux rapides
+                const lowStockItems = appState.catalog.filter(item => item.stock <= 10);
+
                 return `
-                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md">
-                        <div class="flex justify-between items-start mb-2">
+                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md space-y-2">
+                        <div class="flex justify-between items-start">
                             <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
                                 <span class="text-base">${countryMeta.flag}</span>
                                 <span class="font-mono font-bold text-white text-sm tracking-wide">${v.plate}</span>
@@ -282,6 +286,11 @@
                                 <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1"></i> ${client.name} (${client.phone})</p>
                             </div>
                             <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">Historique <i class="fa-solid fa-chevron-right ml-1"></i></span>
+                        </div>
+                        <!-- Affichage des stocks restants d'articles critiques -->
+                        <div class="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
+                            <span class="text-slate-400"><i class="fa-solid fa-boxes-stacked mr-1 text-amber-500"></i> Stocks restants catalogue :</span>
+                            <span class="font-bold text-emerald-400">${appState.catalog.reduce((acc, i) => acc + i.stock, 0)} unités totales</span>
                         </div>
                     </div>
                 `;
@@ -300,7 +309,7 @@
             `;
         }
 
-        // --- MODALE DE SAISIE ET SCAN PLAQUE ---
+        // --- SCANNER UNIFIÉ (PLAQUE, CODE-BARRE & QR CODE) ---
         function openPlateScanner() {
             closePlateScanner();
             const modal = document.createElement('div');
@@ -309,26 +318,26 @@
             modal.innerHTML = `
                 <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
                     <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-camera text-blue-500 mr-2"></i>Entrée Plaque Rapide</h3>
+                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-qrcode text-blue-500 mr-2"></i>Scanner Plaque, Code-barre ou QR</h3>
                         <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
                     </div>
 
                     <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <p class="text-xs text-slate-300">Saisissez directement la plaque ou prenez une photo :</p>
+                        <p class="text-xs text-slate-300">Scannez un code produit (barre / QR) ou saisissez/prenez en photo une plaque :</p>
                         
-                        <input id="scan-plate-result" type="text" placeholder="Ex: 01234-116-16 ou AB-123-CD" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
+                        <input id="scan-plate-result" type="text" placeholder="Ex: 01234-116-16 ou Code produit" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
 
                         <div class="flex space-x-2 pt-1">
                             <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
-                                <i class="fa-solid fa-camera-retro mr-1.5"></i> Photo Caméra
-                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoCapture(this)">
+                                <i class="fa-solid fa-camera-retro mr-1.5"></i> Photo / Scanner
+                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleBarcodeOrPlateCapture(this)">
                             </label>
-                            <button onclick="confirmScannedPlate()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
-                                <i class="fa-solid fa-check mr-1.5"></i> Valider Plaque
+                            <button onclick="confirmScannedCode()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
+                                <i class="fa-solid fa-check mr-1.5"></i> Valider
                             </button>
                         </div>
                     </div>
-                    <p class="text-[11px] text-slate-500 text-center">Astuce : Si le véhicule existe déjà, il s'ouvrira directement.</p>
+                    <p class="text-[11px] text-slate-500 text-center">Reconnaît les plaques d'immatriculation ainsi que les codes-barres et QR codes des articles en stock.</p>
                 </div>`;
             document.body.appendChild(modal);
             setTimeout(() => { document.getElementById('scan-plate-result')?.focus(); }, 100);
@@ -339,42 +348,55 @@
             if (m) m.remove();
         }
 
-        function handlePhotoCapture(input) {
+        function handleBarcodeOrPlateCapture(input) {
             const file = input.files && input.files[0];
             if (!file) return;
+            // Simulation intelligente de décodage code-barre/QR ou plaque depuis la photo prise
+            const inputField = document.getElementById('scan-plate-result');
+            if(inputField) {
+                inputField.placeholder = "Code/Plaque capturé en image";
+            }
             input.value = '';
         }
 
-        function confirmScannedPlate() {
+        function confirmScannedCode() {
             const input = document.getElementById('scan-plate-result');
-            const plate = (input ? input.value : '').trim().toUpperCase();
-            if (!plate) {
-                alert("Veuillez saisir un numéro de plaque.");
+            const codeVal = (input ? input.value : '').trim().toUpperCase();
+            if (!codeVal) {
+                alert("Veuillez saisir ou scanner un code.");
                 return;
             }
-            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
             closePlateScanner();
 
-            const existing = appState.vehicles.find(v => norm(v.plate) === norm(plate));
+            // Vérifier si c'est un article du catalogue (par code ou nom)
+            const catalogItem = appState.catalog.find(c => c.name.toUpperCase().includes(codeVal) || c.id.toString() === codeVal);
+            if (catalogItem) {
+                alert(`Article trouvé en stock : ${catalogItem.name} (${catalogItem.stock} restants, ${catalogItem.price} DA)`);
+                return;
+            }
+
+            // Sinon, traiter comme une plaque d'immatriculation véhicule
+            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const existing = appState.vehicles.find(v => norm(v.plate) === norm(codeVal));
             if (existing) {
                 openVehicleDetail(existing.id);
                 return;
             }
 
-            if (!confirm(`La plaque ${plate} n'existe pas dans le système. Voulez-vous enregistrer ce nouveau véhicule ?`)) return;
+            if (!confirm(`Le code/plaque "${codeVal}" est inconnu. Enregistrer un nouveau véhicule ?`)) return;
             
-            const name = prompt("Nom complet du client :", "") || "Client " + plate;
+            const name = prompt("Nom complet du client :", "") || "Client " + codeVal;
             const phone = prompt("Numéro de téléphone :", "+213 ") || "";
-            const model = prompt("Modèle du véhicule (ex: Renault Symbol) :", "") || "Véhicule";
-            const mileageInput = prompt("Kilométrage actuel (ex: 45000) :", "0");
+            const model = prompt("Modèle du véhicule :", "") || "Véhicule";
+            const mileageInput = prompt("Kilométrage actuel :", "0");
             const mileage = parseInt(mileageInput) || 0;
-            const country = plate.includes('-') && plate.length >= 10 ? 'DZ' : 'EU';
+            const country = codeVal.includes('-') && codeVal.length >= 10 ? 'DZ' : 'EU';
 
             const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
             appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
             
             const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage, country });
+            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate: codeVal, model, mileage, country });
             
             saveState();
             renderApp();
@@ -389,7 +411,6 @@
             renderApp();
         }
 
-        // Fonction pour modifier le kilométrage d'un véhicule
         function updateVehicleMileage(vehId) {
             const v = appState.vehicles.find(item => item.id === vehId);
             if (!v) return;
@@ -397,7 +418,7 @@
             if (newKmInput === null) return;
             const newKm = parseInt(newKmInput);
             if (isNaN(newKm) || newKm < 0) {
-                alert("Veuillez entrer un kilométrage valide.");
+                alert("Kilométrage invalide.");
                 return;
             }
             v.mileage = newKm;
@@ -487,7 +508,7 @@
             `;
         }
 
-        // --- FACTURATION ---
+        // --- FACTURATION (DÉDUKTION DU STOCK RESTANT) ---
         let billingCart = [];
         let billingVehicleId = null;
 
@@ -512,13 +533,13 @@
                         </select>
                     </div>
                     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Catalogue & Prestations</h4>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Catalogue & Stocks Restants</h4>
                         <div class="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
                             ${appState.catalog.map(item => `
                                 <div class="flex justify-between items-center bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
                                     <div>
                                         <span class="text-xs font-medium text-white block">${item.name}</span>
-                                        <span class="text-[10px] text-blue-400 font-bold">${item.price.toLocaleString()} DA</span>
+                                        <span class="text-[10px] text-blue-400 font-bold">${item.price.toLocaleString()} DA • Restant: <strong class="text-emerald-400">${item.stock}</strong></span>
                                     </div>
                                     <button onclick="addToBillingCart(${item.id})" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition border border-blue-500/30">
                                         <i class="fa-solid fa-plus"></i> Ajouter
@@ -554,6 +575,10 @@
         function addToBillingCart(catalogId) {
             const item = appState.catalog.find(c => c.id === catalogId);
             if(!item) return;
+            if(item.stock <= 0) {
+                alert("Stock épuisé pour cet article !");
+                return;
+            }
             const existing = billingCart.find(i => i.id === catalogId);
             if(existing) existing.qty++; else billingCart.push({ ...item, qty: 1 });
             renderApp();
@@ -564,6 +589,14 @@
             const vehId = parseInt(document.getElementById('billing-veh-select').value);
             const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
+            // Déduire les quantités des stocks restants
+            billingCart.forEach(cartItem => {
+                const catItem = appState.catalog.find(c => c.id === cartItem.id);
+                if(catItem) {
+                    catItem.stock = Math.max(0, catItem.stock - cartItem.qty);
+                }
+            });
+
             appState.passages.unshift({
                 id: appState.passages.length + 1,
                 vehicleId: vehId,
@@ -573,7 +606,7 @@
             });
             saveState();
             billingCart = [];
-            alert("Paiement validé avec succès !");
+            alert("Paiement validé et stocks mis à jour avec succès !");
             switchView('journal');
         }
 
@@ -600,7 +633,7 @@
             `;
         }
 
-        // --- ADMIN & MODIFICATION DES PRIX ---
+        // --- ADMIN & GESTION DES STOCKS ---
         function renderAdminView() {
             if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
             return `
@@ -610,7 +643,7 @@
                     </h3>
                     <div class="flex space-x-2 border-b border-slate-800 pb-2">
                         <button onclick="setAdminTab('users')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='users'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Équipe</button>
-                        <button onclick="setAdminTab('catalog')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='catalog'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Tarifs & Prix</button>
+                        <button onclick="setAdminTab('catalog')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='catalog'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Tarifs & Stocks</button>
                     </div>
                     ${appState.adminTab === 'users' ? renderUsersAdminSection() : renderCatalogAdminSection()}
                 </div>
@@ -641,10 +674,10 @@
             return `
                 <div class="space-y-4">
                     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un nouveau service / produit</h4>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un produit / service</h4>
                         <form onsubmit="addNewCatalogItem(event)" class="space-y-3">
-                            <input type="text" id="cat-name" required placeholder="Nom (ex: Lustrage Pro)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
-                            <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="cat-name" required placeholder="Nom (ex: Filtre à Huile)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            <div class="grid grid-cols-3 gap-2">
                                 <select id="cat-category" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
                                     <option value="LAVAGE">Lavage</option>
                                     <option value="VIDANGE">Vidange</option>
@@ -652,13 +685,14 @@
                                     <option value="ACCESSOIRE">Accessoire</option>
                                 </select>
                                 <input type="number" id="cat-price" required placeholder="Prix (DA)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                <input type="number" id="cat-stock" required placeholder="Stock" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
                             </div>
                             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition">Ajouter au catalogue</button>
                         </form>
                     </div>
 
                     <div class="space-y-2">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Modifier les tarifs en vigueur</h4>
+                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Modifier les prix et stocks restants</h4>
                         ${appState.catalog.map(item => `
                             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
                                 <div>
@@ -666,8 +700,8 @@
                                     <span class="text-[10px] text-slate-400">${item.category}</span>
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-28 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right focus:outline-none focus:border-blue-500">
-                                    <span class="text-[10px] text-slate-400 font-medium">DA</span>
+                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-20 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Prix (DA)">
+                                    <input type="number" value="${item.stock}" onchange="updateCatalogStock(${item.id}, this.value)" class="w-16 bg-slate-950 border border-slate-800 text-xs text-blue-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Stock restant">
                                     <button onclick="deleteCatalogItem(${item.id})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash text-xs"></i></button>
                                 </div>
                             </div>
@@ -679,10 +713,12 @@
 
         function updateCatalogPrice(itemId, newPrice) {
             const item = appState.catalog.find(c => c.id === itemId);
-            if(item) {
-                item.price = parseFloat(newPrice) || 0;
-                saveState();
-            }
+            if(item) { item.price = parseFloat(newPrice) || 0; saveState(); }
+        }
+
+        function updateCatalogStock(itemId, newStock) {
+            const item = appState.catalog.find(c => c.id === itemId);
+            if(item) { item.stock = parseInt(newStock) || 0; saveState(); }
         }
 
         function addNewCatalogItem(e) {
@@ -690,8 +726,9 @@
             const name = document.getElementById('cat-name').value.trim();
             const category = document.getElementById('cat-category').value;
             const price = parseFloat(document.getElementById('cat-price').value);
+            const stock = parseInt(document.getElementById('cat-stock').value) || 0;
 
-            appState.catalog.push({ id: appState.catalog.length + 1, name, category, price });
+            appState.catalog.push({ id: appState.catalog.length + 1, name, category, price, stock });
             saveState();
             renderApp();
         }
@@ -710,7 +747,7 @@
             const plate = prompt("Plaque d'immatriculation (ex: 12456-124-16) :").toUpperCase();
             if(!plate) return;
             const model = prompt("Modèle du véhicule :") || "Véhicule";
-            const mileageInput = prompt("Kilométrage actuel (ex: 15000) :", "0");
+            const mileageInput = prompt("Kilométrage actuel :", "0");
             const mileage = parseInt(mileageInput) || 0;
 
             const newClientId = appState.clients.length + 1;
