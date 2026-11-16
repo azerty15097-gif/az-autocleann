@@ -1,771 +1,2360 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AZ-AutoClean - Gestion Lavage & Entretien</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AZ-LAVAGE • Gestion Station Lavage & Entretien</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfeff',
+              100: '#cffafe',
+              400: '#22d3ee',
+              500: '#06b6d4',
+              600: '#0891b2',
+              900: '#164e63',
+            },
+            slateDark: {
+              800: '#1e293b',
+              900: '#0f172a',
+              950: '#090d16',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Styles personnalisés pour simulation scanner & mobile app */
+    body {
+      background-color: #050811;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .app-shell {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 0 50px rgba(6, 182, 212, 0.12);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes scanLine {
+      0%, 100% { top: 10%; opacity: 0.9; }
+      50% { top: 88%; opacity: 1; }
+    }
+    .scanner-laser {
+      position: absolute;
+      left: 6%;
+      right: 6%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #22d3ee, #ffffff, #22d3ee, transparent);
+      box-shadow: 0 0 12px #22d3ee, 0 0 24px #06b6d4;
+      animation: scanLine 2.2s ease-in-out infinite;
+    }
+    .plate-dz {
+      background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+      color: #0f172a;
+      border: 2.5px solid #1e293b;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.08em;
+    }
+    .plate-eu {
+      background: #ffffff;
+      color: #0f172a;
+      border: 2.5px solid #1e293b;
+      font-family: 'JetBrains Mono', monospace;
+      position: relative;
+      padding-left: 22px;
+    }
+    .plate-eu::before {
+      content: 'EU';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 18px;
+      background: #1d4ed8;
+      color: #fff;
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+    }
+    .plate-intl {
+      background: #fef08a;
+      color: #0f172a;
+      border: 2.5px solid #1e293b;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+    .animate-float {
+      animation: floatSlow 3.5s ease-in-out infinite;
+    }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
+<body class="text-slate-100 antialiased">
 
-    <!-- CONTENEUR PRINCIPAL DE L'APPLICATION -->
-    <div id="app" class="flex-1 flex flex-col max-w-md mx-auto w-full bg-slate-950 shadow-2xl relative overflow-hidden">
-        <!-- Le contenu dynamique est injecté ici par JavaScript -->
+  <!-- Conteneur Principal Mobile App -->
+  <div id="app" class="app-shell bg-slate-50 dark:bg-slateDark-950 text-slate-900 dark:text-slate-100 border-x border-slate-200 dark:border-slate-800/80">
+    
+    <!-- Bandeau Notification / Toast non-bloquant (Global Login + App) -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[440px] pointer-events-none flex flex-col gap-2"></div>
+
+    <!-- ======================================================================= -->
+    <!-- ÉCRAN DE CONNEXION (LOGIN) AU DÉMARRAGE                                 -->
+    <!-- ======================================================================= -->
+    <section id="login-screen" class="flex-1 flex flex-col justify-between p-5 bg-gradient-to-b from-[#071124] via-[#09162e] to-[#050811] text-slate-100 relative overflow-hidden">
+      <!-- Halo lumineux décoratif -->
+      <div class="absolute -top-24 -left-24 w-64 h-64 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute top-1/3 -right-24 w-64 h-64 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- En-tête Logo & Marque AZ-LAVAGE -->
+      <div class="pt-6 pb-2 text-center relative z-10">
+        <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-700 p-[2px] shadow-2xl shadow-cyan-500/30 animate-float">
+          <div class="w-full h-full rounded-[22px] bg-[#081326] flex items-center justify-center relative">
+            <i class="fa-solid fa-car-side text-3xl text-cyan-400"></i>
+            <span class="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 text-slate-950 flex items-center justify-center text-xs shadow-md">
+              <i class="fa-solid fa-droplet"></i>
+            </span>
+          </div>
+        </div>
+        <h1 class="mt-4 text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
+          <span>AZ-LAVAGE</span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-extrabold">STATION PRO</span>
+        </h1>
+        <p class="text-xs text-cyan-200/70 mt-1">Gestion Lavage Auto, Vidange & Stock</p>
+      </div>
+
+      <!-- Carte Formulaire d'Authentification -->
+      <div class="bg-slate-900/80 backdrop-blur-xl border border-cyan-500/20 rounded-3xl p-5 shadow-2xl space-y-4 relative z-10">
+        <div>
+          <h2 class="text-base font-extrabold text-white">Connexion à l'espace travail</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Entrez vos identifiants Administrateur ou Lavagiste</p>
+        </div>
+
+        <!-- Message d'erreur de connexion -->
+        <div id="login-error-box" class="hidden p-3 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation text-rose-400 text-sm shrink-0"></i>
+          <span id="login-error-text">Identifiant ou mot de passe incorrect.</span>
+        </div>
+
+        <form id="login-form" onsubmit="handleLoginSubmit(event)" class="space-y-3.5">
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Identifiant / Email ou Téléphone
+            </label>
+            <div class="relative">
+              <i class="fa-solid fa-user-shield absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400/80 text-xs"></i>
+              <input id="login-identifier" type="text" required autocomplete="username" placeholder="Ex: admin@az-lavage.dz ou 0550..."
+                class="w-full pl-9 pr-3.5 py-3 rounded-2xl bg-slate-950/90 border border-slate-700/80 text-white text-xs font-medium placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Mot de passe
+            </label>
+            <div class="relative">
+              <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400/80 text-xs"></i>
+              <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••"
+                class="w-full pl-9 pr-10 py-3 rounded-2xl bg-slate-950/90 border border-slate-700/80 text-white text-xs font-medium placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition" />
+              <button type="button" onclick="togglePasswordVisibility()" title="Afficher / Masquer le mot de passe"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-cyan-400 p-1">
+                <i id="login-eye-icon" class="fa-solid fa-eye text-xs"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-0.5">
+            <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+              <input id="login-remember" type="checkbox" checked class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-0" />
+              <span>Se souvenir de moi</span>
+            </label>
+            <span class="text-[11px] text-cyan-400/80 font-medium">Accès sécurisé</span>
+          </div>
+
+          <button type="submit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>Se connecter</span>
+          </button>
+        </form>
+
+        <!-- Accès Démo Rapide 1-Clic -->
+        <div class="pt-3 border-t border-slate-800 space-y-2.5">
+          <p class="text-[10px] font-extrabold uppercase tracking-wider text-center text-slate-400">
+            <i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Connexion Rapide (Accès Démo 1-Clic)
+          </p>
+          <div class="grid grid-cols-2 gap-2.5">
+            <button type="button" onclick="quickDemoLogin('admin@az-lavage.dz', 'admin123')"
+              class="p-2.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-left transition active:scale-98">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-amber-400">👑 Admin</span>
+                <i class="fa-solid fa-arrow-right text-[10px] text-amber-400"></i>
+              </div>
+              <p class="text-[10px] text-slate-300 font-mono mt-1 truncate">admin@az-lavage.dz</p>
+              <p class="text-[9px] text-slate-400">Accès total & finances</p>
+            </button>
+
+            <button type="button" onclick="quickDemoLogin('karim@az-lavage.dz', 'lavage123')"
+              class="p-2.5 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-left transition active:scale-98">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold text-cyan-400">🧼 Lavagiste</span>
+                <i class="fa-solid fa-arrow-right text-[10px] text-cyan-400"></i>
+              </div>
+              <p class="text-[10px] text-slate-300 font-mono mt-1 truncate">karim@az-lavage.dz</p>
+              <p class="text-[9px] text-slate-400">Plaques, vidange & prix</p>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pied de page Login -->
+      <p class="text-center text-[10px] text-slate-500 pt-3 relative z-10">
+        AZ-LAVAGE v2.0 • Système de gestion station lavage & entretien
+      </p>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- ESPACE APPLICATIF CONNECTÉ (MASQUÉ TANT QUE NON AUTHENTIFIÉ)            -->
+    <!-- ======================================================================= -->
+    <div id="authenticated-shell" class="hidden flex-1 flex flex-col">
+      <!-- Header Fixe Supérieur -->
+      <header class="sticky top-0 z-30 bg-white/95 dark:bg-slateDark-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3.5 py-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <!-- Logo & Nom Station -->
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25 shrink-0">
+              <i class="fa-solid fa-car-side text-sm"></i>
+            </div>
+            <div class="min-w-0">
+              <h1 class="font-extrabold text-sm tracking-tight leading-none flex items-center gap-1.5">
+                <span>AZ-LAVAGE</span>
+                <span id="header-role-badge" class="text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-amber-500/20 text-amber-500">Admin</span>
+              </h1>
+              <p id="header-user-subtitle" class="text-[11px] text-slate-500 dark:text-slate-300 font-semibold truncate mt-1">
+                Administrateur
+              </p>
+            </div>
+          </div>
+
+          <!-- Bouton Thème + Bouton Déconnexion -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button onclick="toggleTheme()" title="Changer le thème" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+              <i id="theme-icon" class="fa-solid fa-sun text-xs"></i>
+            </button>
+            
+            <button onclick="logoutUser()" title="Se déconnecter" class="px-2.5 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 font-bold text-[11px] flex items-center gap-1.5 transition active:scale-95">
+              <i class="fa-solid fa-right-from-bracket text-xs"></i>
+              <span>Déconnexion</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Zone de Contenu Principal (Vues dynamiques) -->
+      <main id="main-content" class="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-4">
+        <!-- Le contenu est injecté par le routeur JS -->
+      </main>
+
+      <!-- Barre de Navigation Inférieure Fixe (5 onglets) -->
+      <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-30 bg-white/95 dark:bg-slateDark-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-2 py-1.5">
+        <div class="grid grid-cols-5 items-center text-center">
+          <button onclick="navigate('scan-plate')" data-nav="scan-plate" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+            <i class="fa-solid fa-camera text-base mb-0.5"></i>
+            <span class="text-[10px] font-semibold">Plaque</span>
+          </button>
+
+          <button onclick="navigate('clients')" data-nav="clients" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+            <i class="fa-solid fa-car-side text-base mb-0.5"></i>
+            <span class="text-[10px] font-semibold">Clients</span>
+          </button>
+
+          <!-- Bouton Central Scan Code-Barres / QR -->
+          <button onclick="navigate('scan-barcode')" data-nav="scan-barcode" class="nav-btn flex flex-col items-center justify-center -mt-4">
+            <div id="nav-qr-circle" class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/30 border-4 border-slate-50 dark:border-slateDark-950 transition-transform active:scale-95">
+              <i class="fa-solid fa-barcode text-lg"></i>
+            </div>
+            <span class="text-[10px] font-bold mt-0.5 text-cyan-500">Scan Prod</span>
+          </button>
+
+          <button onclick="navigate('catalog')" data-nav="catalog" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+            <i class="fa-solid fa-oil-can text-base mb-0.5"></i>
+            <span class="text-[10px] font-semibold">Catalogue</span>
+          </button>
+
+          <button onclick="navigate('admin')" data-nav="admin" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+            <i class="fa-solid fa-chart-pie text-base mb-0.5"></i>
+            <span id="nav-admin-label" class="text-[10px] font-semibold">Finances</span>
+          </button>
+        </div>
+      </nav>
     </div>
 
-    <script>
-        // --- BASE DE DONNÉES INITIALE & CONFIGURATION ---
-        const DEFAULT_USERS = [
-            { id: 1, name: "Karim Benali", username: "admin", pin: "1234", role: "admin", active: true },
-            { id: 2, name: "Sofiane Hadj", username: "sofiane", pin: "1111", role: "cashier", active: true },
-            { id: 3, name: "Mourad Ziani", username: "mourad", pin: "2222", role: "washer", active: true }
-        ];
+    <!-- Modale Dynamique Réutilisable -->
+    <div id="modal-overlay" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4">
+      <div class="w-full max-w-[460px] bg-white dark:bg-slateDark-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+        <div class="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+          <h3 id="modal-title" class="font-extrabold text-sm">Détails</h3>
+          <button onclick="closeModal()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 flex items-center justify-center transition">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+        <div id="modal-body" class="p-4 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
 
-        const ROLES_CONFIG = {
-            admin: { label: "Administrateur", badge: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-            cashier: { label: "Caissier", badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-            washer: { label: "Lavagiste / Mécano", badge: "bg-blue-500/20 text-blue-400 border-blue-500/30" }
-        };
+  <script>
+    const STORAGE_KEY = 'AZ_LAVAGE_DB_V2';
+    const SESSION_KEY = 'AZ_LAVAGE_SESSION_V2';
+    let activeMediaStream = null;
 
-        const COUNTRY_META = {
-            'DZ': { name: 'Algérie', flag: '🇩🇿', format: '12345-123-16' },
-            'EU': { name: 'EU', flag: '🇪🇺', format: 'AB-123-CD' },
-            'OTHER': { name: 'Autre format', flag: '🌐', format: 'Libre' }
-        };
+    // Dates utilitaires pour données réalistes (Aujourd'hui, Ce mois, Cette année)
+    const now = new Date();
+    const todayISO = now.toISOString().split('T')[0];
+    const thisMonthISO = new Date(now.getFullYear(), now.getMonth(), Math.max(1, now.getDate() - 4)).toISOString().split('T')[0];
+    const lastMonthISO = new Date(now.getFullYear(), Math.max(0, now.getMonth() - 1), 15).toISOString().split('T')[0];
 
-        const DEFAULT_CATALOG = [
-            { id: 1, name: "Lavage Extérieur Simple", category: "LAVAGE", price: 800, stock: 50 },
-            { id: 2, name: "Lavage Complet (Intérieur + Extérieur)", category: "LAVAGE", price: 1500, stock: 50 },
-            { id: 3, name: "Lavage VIP + Lustrage", category: "LAVAGE", price: 3000, stock: 30 },
-            { id: 4, name: "Vidange Moteur (Main d'œuvre)", category: "VIDANGE", price: 1200, stock: 100 },
-            { id: 5, name: "Filtre à Huile", category: "FILTRE", price: 1500, stock: 14 },
-            { id: 6, name: "Filtre à Air", category: "FILTRE", price: 1300, stock: 8 },
-            { id: 7, name: "Filtre Habitacle (Clim)", category: "FILTRE", price: 1800, stock: 12 },
-            { id: 8, name: "Filtre à Carburant", category: "FILTRE", price: 2500, stock: 5 },
-            { id: 9, name: "Liquide Lave-glace", category: "ACCESSOIRE", price: 500, stock: 25 },
-            { id: 10, name: "Parfum / Sapin Senteur", category: "ACCESSOIRE", price: 300, stock: 40 }
-        ];
-
-        let appState = {
-            currentUser: null,
-            currentView: 'login',
-            users: JSON.parse(localStorage.getItem('autoclean_users')) || DEFAULT_USERS,
-            catalog: JSON.parse(localStorage.getItem('autoclean_catalog')) || DEFAULT_CATALOG,
-            clients: JSON.parse(localStorage.getItem('autoclean_clients')) || [
-                { id: 1, name: "Rachid Kaci", phone: "+213 555 12 34 56", totalSpent: 7300 },
-                { id: 2, name: "Amine Meziane", phone: "+213 661 98 76 54", totalSpent: 4100 }
-            ],
-            vehicles: JSON.parse(localStorage.getItem('autoclean_vehicles')) || [
-                { id: 1, clientId: 1, plate: "01234-116-15", model: "Renault Clio 4 (2022)", mileage: 45000, country: 'DZ' },
-                { id: 2, clientId: 2, plate: "AB-842-TR", model: "Peugeot 3008", mileage: 62000, country: 'EU' }
-            ],
-            passages: JSON.parse(localStorage.getItem('autoclean_passages')) || [
-                { id: 1, vehicleId: 1, date: "2026-03-10 10:30", mileage: 45000, totalAmount: 4300, items: ["Lavage Complet", "Vidange Moteur", "Filtre à Huile"] },
-                { id: 2, vehicleId: 2, date: "2026-03-12 14:15", mileage: 62000, totalAmount: 1500, items: ["Lavage Complet"] }
-            ],
-            adminTab: 'users'
-        };
-
-        function saveState() {
-            localStorage.setItem('autoclean_users', JSON.stringify(appState.users));
-            localStorage.setItem('autoclean_catalog', JSON.stringify(appState.catalog));
-            localStorage.setItem('autoclean_clients', JSON.stringify(appState.clients));
-            localStorage.setItem('autoclean_vehicles', JSON.stringify(appState.vehicles));
-            localStorage.setItem('autoclean_passages', JSON.stringify(appState.passages));
+    // Base de données initiale de démonstration
+    const DEFAULT_DB = {
+      currency: 'DA', // Dinar Algérien par défaut
+      activeUserId: null,
+      users: [
+        {
+          id: 'u1',
+          name: 'Yacine Benali (Admin)',
+          role: 'admin',
+          login: 'admin@az-lavage.dz',
+          password: 'admin123',
+          phone: '0550 12 34 56',
+          active: true
+        },
+        {
+          id: 'u2',
+          name: 'Karim (Lavagiste)',
+          role: 'employee',
+          login: 'karim@az-lavage.dz',
+          password: 'lavage123',
+          phone: '0661 98 76 54',
+          active: true
+        },
+        {
+          id: 'u3',
+          name: 'Mehdi (Mécanicien Vidange)',
+          role: 'employee',
+          login: 'mehdi@az-lavage.dz',
+          password: 'lavage123',
+          phone: '0770 45 12 89',
+          active: true
         }
-
-        // --- AUTHENTIFICATION ---
-        function loginUser(e) {
-            if(e) e.preventDefault();
-            const username = document.getElementById('login-user').value.trim().toLowerCase();
-            const pin = document.getElementById('login-pin').value.trim();
-            const errorDiv = document.getElementById('login-error');
-
-            const found = appState.users.find(u => u.username === username && u.pin === pin);
-            if(!found) {
-                errorDiv.classList.remove('hidden');
-                return;
+      ],
+      clients: [
+        {
+          id: 'c1',
+          plate: '00482-123-16',
+          plateType: 'DZ',
+          name: 'Amine Khelifi',
+          phone: '0551 44 88 22',
+          vehicle: 'Volkswagen Golf 8 GTD',
+          currentKm: 64200,
+          nextOilKm: 65000, // Proche de la vidange !
+          preferredOil: 'Castrol Edge 5W30 LL (5L)',
+          notes: 'Client VIP - Préfère parfum Vanille',
+          history: [
+            {
+              id: 'h101',
+              date: todayISO,
+              km: 64200,
+              items: ['Lavage VIP + Lustrage', 'Parfum / Sapin Senteur'],
+              total: 2800,
+              tech: 'Yacine (Lavagiste)'
+            },
+            {
+              id: 'h100',
+              date: lastMonthISO,
+              km: 55000,
+              items: ['Vidange Moteur', 'Castrol Edge 5W30 LL (5L)', 'Filtre à Huile', 'Filtre à Air'],
+              total: 11200,
+              tech: 'Mehdi (Mécanicien)'
             }
-            if(!found.active) {
-                errorDiv.textContent = "Ce compte a été suspendu.";
-                errorDiv.classList.remove('hidden');
-                return;
+          ]
+        },
+        {
+          id: 'c2',
+          plate: 'AB-458-CD',
+          plateType: 'EU',
+          name: 'Sophie Laurent',
+          phone: '+33 6 14 25 36 47',
+          vehicle: 'Peugeot 3008 GT Line',
+          currentKm: 92400,
+          nextOilKm: 90000, // Vidange dépassée !
+          preferredOil: 'Total Quartz Ineo ECS 5W30 (5L)',
+          notes: 'Véhicule immatriculé France',
+          history: [
+            {
+              id: 'h102',
+              date: thisMonthISO,
+              km: 92400,
+              items: ['Lavage Complet (Intérieur + Extérieur)', 'Liquide Lave-glace'],
+              total: 2100,
+              tech: 'Yacine (Lavagiste)'
             }
-
-            appState.currentUser = found;
-            appState.currentView = 'home';
-            renderApp();
-        }
-
-        function logoutUser() {
-            appState.currentUser = null;
-            appState.currentView = 'login';
-            renderApp();
-        }
-
-        // --- MOTEUR DE RENDU PRINCIPAL ---
-        function renderApp() {
-            const container = document.getElementById('app');
-            container.innerHTML = '';
-
-            if(!appState.currentUser) {
-                container.innerHTML = renderLoginView();
-                return;
+          ]
+        },
+        {
+          id: 'c3',
+          plate: '12940-121-31',
+          plateType: 'DZ',
+          name: 'Sofiane Mansouri',
+          phone: '0662 33 71 90',
+          vehicle: 'Renault Clio 4 DCI',
+          currentKm: 118000,
+          nextOilKm: 125000,
+          preferredOil: 'Total Quartz 7000 10W40 (4L)',
+          notes: 'Vérifier pression pneus à chaque passage',
+          history: [
+            {
+              id: 'h103',
+              date: todayISO,
+              km: 118000,
+              items: ['Vidange Moteur', 'Total Quartz 7000 10W40 (4L)', 'Filtre à Huile', 'Filtre à Carburant'],
+              total: 8900,
+              tech: 'Mehdi (Mécanicien)'
             }
-
-            let html = '';
-            html += renderHeader();
-            html += `<main class="flex-1 overflow-y-auto pb-24 px-4 pt-4">`;
-
-            if(appState.currentView === 'home') html += renderHomeView();
-            else if(appState.currentView === 'clients') html += renderClientsView();
-            else if(appState.currentView === 'billing') html += renderBillingView();
-            else if(appState.currentView === 'journal') html += renderJournalView();
-            else if(appState.currentView === 'admin') html += renderAdminView();
-            else if(appState.currentView === 'vehicle_detail') html += renderVehicleDetailView();
-
-            html += `</main>`;
-            html += renderNav();
-            container.innerHTML = html;
+          ]
+        },
+        {
+          id: 'c4',
+          plate: '08715-124-09',
+          plateType: 'DZ',
+          name: 'Nadia Zerrouki',
+          phone: '0771 60 50 40',
+          vehicle: 'Hyundai Tucson Hybrid',
+          currentKm: 28500,
+          nextOilKm: 35000,
+          preferredOil: 'Mobil 1 ESP 5W30 (4L)',
+          notes: '',
+          history: [
+            {
+              id: 'h104',
+              date: thisMonthISO,
+              km: 28500,
+              items: ['Lavage Extérieur Simple'],
+              total: 800,
+              tech: 'Yacine (Lavagiste)'
+            }
+          ]
         }
+      ],
+      catalog: [
+        // Services
+        { id: 's1', barcode: 'SRV-001', category: 'service', name: 'Lavage Extérieur Simple', price: 800, stock: 999, unit: 'Prestation' },
+        { id: 's2', barcode: 'SRV-002', category: 'service', name: 'Lavage Intérieur Simple', price: 900, stock: 999, unit: 'Prestation' },
+        { id: 's3', barcode: 'SRV-003', category: 'service', name: 'Lavage Complet (Intérieur + Extérieur)', price: 1500, stock: 999, unit: 'Prestation' },
+        { id: 's4', barcode: 'SRV-004', category: 'service', name: 'Lavage VIP + Lustrage', price: 2500, stock: 999, unit: 'Prestation' },
+        { id: 's5', barcode: 'SRV-005', category: 'service', name: 'Vidange Moteur (Main d\'œuvre)', price: 1000, stock: 999, unit: 'Forfait' },
 
-        // --- VUE LOGIN ---
-        function renderLoginView() {
-            return `
-                <div class="flex-1 flex flex-col justify-center px-6 py-12 bg-slate-950">
-                    <div class="text-center mb-8">
-                        <div class="w-20 h-20 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-blue-500/20 mb-4">
-                            <i class="fa-solid fa-car-wash text-3xl text-white"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold text-white tracking-tight">AZ-AutoClean</h1>
-                        <p class="text-xs text-slate-400 mt-1">Gestion Station de Lavage & Entretien</p>
-                    </div>
+        // Produits & Filtres
+        { id: 'p1', barcode: '6130001122334', category: 'product', name: 'Filtre à Huile', price: 1200, stock: 28, unit: 'Pièce' },
+        { id: 'p2', barcode: '6130001122341', category: 'product', name: 'Filtre à Air', price: 1600, stock: 19, unit: 'Pièce' },
+        { id: 'p3', barcode: '6130001122358', category: 'product', name: 'Filtre à Carburant', price: 2400, stock: 14, unit: 'Pièce' },
+        { id: 'p4', barcode: '6130001122365', category: 'product', name: 'Filtre Habitacle (Clim)', price: 1500, stock: 22, unit: 'Pièce' },
+        { id: 'p5', barcode: '6130001122372', category: 'product', name: 'Liquide Lave-glace (5L)', price: 600, stock: 35, unit: 'Bidon 5L' },
+        { id: 'p6', barcode: '6130001122389', category: 'product', name: 'Parfum / Sapin Senteur', price: 300, stock: 64, unit: 'Unité' },
 
-                    <form onsubmit="loginUser(event)" class="space-y-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 backdrop-blur">
-                        <div id="login-error" class="hidden p-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl text-center">
-                            Identifiant ou code PIN incorrect.
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-400 mb-1">Identifiant</label>
-                            <input type="text" id="login-user" required placeholder="Votre identifiant" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-400 mb-1">Code PIN</label>
-                            <input type="password" id="login-pin" required placeholder="••••" maxlength="6" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 tracking-widest">
-                        </div>
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-blue-600/30 text-sm">
-                            Se connecter
-                        </button>
-                    </form>
-                </div>
-            `;
+        // Huiles Moteur (Section dédiée avec viscosité & contenance)
+        { id: 'o1', barcode: '3425901018012', category: 'oil', brand: 'Total Quartz', viscosity: '5W30', oilType: '100% Synthétique', capacity: '5L', name: 'Total Quartz Ineo ECS 5W30 (5L)', price: 6800, stock: 16 },
+        { id: 'o2', barcode: '4008177111228', category: 'oil', brand: 'Castrol Edge', viscosity: '5W30', oilType: '100% Synthétique LL', capacity: '5L', name: 'Castrol Edge 5W30 LL (5L)', price: 7600, stock: 11 },
+        { id: 'o3', barcode: '5055107436127', category: 'oil', brand: 'Mobil 1', viscosity: '5W40', oilType: 'Synthétique', capacity: '4L', name: 'Mobil 1 Super 3000 5W40 (4L)', price: 5900, stock: 14 },
+        { id: 'o4', barcode: '3425901029445', category: 'oil', brand: 'Total Quartz', viscosity: '10W40', oilType: 'Semi-Synthétique', capacity: '4L', name: 'Total Quartz 7000 10W40 (4L)', price: 4300, stock: 25 },
+        { id: 'o5', barcode: '6130990011220', category: 'oil', brand: 'Naftal Chelia', viscosity: '15W40', oilType: 'Minérale Turbo', capacity: '5L', name: 'Naftal Chelia TD 15W40 (5L)', price: 3200, stock: 30 },
+        { id: 'o6', barcode: '3425901099881', category: 'oil', brand: 'Total Quartz', viscosity: '5W30', oilType: 'Appoint 100% Synth.', capacity: '1L', name: 'Total Quartz 5W30 Appoint (1L)', price: 1650, stock: 20 }
+      ],
+      transactions: [
+        // Recettes
+        { id: 't1', type: 'income', date: todayISO, label: 'Lavage VIP + Parfum (00482-123-16)', amount: 2800, category: 'Lavage' },
+        { id: 't2', type: 'income', date: todayISO, label: 'Vidange Complète Clio 4 (12940-121-31)', amount: 8900, category: 'Vidange' },
+        { id: 't3', type: 'income', date: thisMonthISO, label: 'Lavage Complet + Lave-glace (AB-458-CD)', amount: 2100, category: 'Lavage' },
+        { id: 't4', type: 'income', date: thisMonthISO, label: 'Lavage Extérieur (08715-124-09)', amount: 800, category: 'Lavage' },
+        { id: 't5', type: 'income', date: lastMonthISO, label: 'Vidange Golf 8 GTD (00482-123-16)', amount: 11200, category: 'Vidange' },
+        // Dépenses
+        { id: 'e1', type: 'expense', date: todayISO, label: 'Achat Shampooing Auto & Cire Lustrage', amount: 2200, category: 'Produits Lavage' },
+        { id: 'e2', type: 'expense', date: thisMonthISO, label: 'Facture Eau & Électricité Station', amount: 4500, category: 'Charges' },
+        { id: 'e3', type: 'expense', date: lastMonthISO, label: 'Réapprovisionnement Filtres & Huiles', amount: 14000, category: 'Stock' }
+      ],
+      activeQueue: [
+        {
+          id: 'q1',
+          clientId: 'c1',
+          plate: '00482-123-16',
+          plateType: 'DZ',
+          clientName: 'Amine Khelifi',
+          vehicle: 'Volkswagen Golf 8 GTD',
+          bay: 'Piste Lavage 1',
+          service: 'Lavage VIP + Lustrage',
+          status: 'washing',
+          startTime: '09:15'
+        },
+        {
+          id: 'q2',
+          clientId: 'c3',
+          plate: '12940-121-31',
+          plateType: 'DZ',
+          clientName: 'Sofiane Mansouri',
+          vehicle: 'Renault Clio 4 DCI',
+          bay: 'Pont Vidange',
+          service: 'Vidange + Filtre Huile',
+          status: 'ready',
+          startTime: '08:50'
         }
+      ]
+    };
 
-        // --- EN-TÊTE & NAVIGATION ---
-        function renderHeader() {
-            const roleInfo = ROLES_CONFIG[appState.currentUser.role];
-            return `
-                <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold">
-                            ${appState.currentUser.name.charAt(0)}
-                        </div>
-                        <div>
-                            <h2 class="text-sm font-semibold text-white leading-tight">${appState.currentUser.name}</h2>
-                            <span class="inline-block text-[10px] px-2 py-0.5 rounded-full border mt-0.5 ${roleInfo.badge}">${roleInfo.label}</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        ${appState.currentUser.role === 'admin' ? `
-                            <button onclick="switchView('admin')" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400 hover:bg-slate-700 transition" title="Administration">
-                                <i class="fa-solid fa-shield-halved text-sm"></i>
-                            </button>
-                        ` : ''}
-                        <button onclick="logoutUser()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-rose-400 hover:bg-slate-700 transition" title="Déconnexion">
-                            <i class="fa-solid fa-power-off text-sm"></i>
-                        </button>
-                    </div>
-                </header>
-            `;
+    // État global de l'application
+    let db = loadDB();
+    if (!db.activeQueue) db.activeQueue = DEFAULT_DB.activeQueue;
+    let currentRoute = 'scan-plate';
+    let catalogFilter = 'all'; // 'all' | 'service' | 'product' | 'oil'
+    let financePeriod = 'day'; // 'day' | 'month' | 'year'
+    let searchClientQuery = '';
+    let searchCatalogQuery = '';
+
+    // ============================================================================
+    // GESTION DU STOCKAGE, AUTHENTIFICATION & SESSION UTILISATEUR
+    // ============================================================================
+    function loadDB() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error('Erreur lecture localStorage:', e);
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DB));
+      return JSON.parse(JSON.stringify(DEFAULT_DB));
+    }
+
+    function saveDB() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (e) {
+        showToast('Erreur de sauvegarde locale', 'error');
+      }
+    }
+
+    function getActiveUser() {
+      if (!db.activeUserId) return null;
+      return db.users.find(u => u.id === db.activeUserId) || null;
+    }
+
+    function isAdmin() {
+      const u = getActiveUser();
+      return Boolean(u && u.role === 'admin');
+    }
+
+    function formatPrice(amount) {
+      return `${Number(amount).toLocaleString('fr-FR')} ${db.currency}`;
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('login-password');
+      const icon = document.getElementById('login-eye-icon');
+      if (!input || !icon) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash text-xs text-cyan-400';
+      } else {
+        input.type = 'password';
+        icon.className = 'fa-solid fa-eye text-xs';
+      }
+    }
+
+    function showLoginError(message) {
+      const box = document.getElementById('login-error-box');
+      const text = document.getElementById('login-error-text');
+      if (box && text) {
+        text.textContent = message;
+        box.classList.remove('hidden');
+      }
+    }
+
+    function hideLoginError() {
+      const box = document.getElementById('login-error-box');
+      if (box) box.classList.add('hidden');
+    }
+
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      hideLoginError();
+      const identifier = document.getElementById('login-identifier').value.trim().toLowerCase();
+      const password = document.getElementById('login-password').value;
+      const remember = document.getElementById('login-remember').checked;
+
+      authenticateCredentials(identifier, password, remember);
+    }
+
+    function quickDemoLogin(identifier, password) {
+      hideLoginError();
+      document.getElementById('login-identifier').value = identifier;
+      document.getElementById('login-password').value = password;
+      authenticateCredentials(identifier, password, true);
+    }
+
+    function authenticateCredentials(identifier, password, remember = true) {
+      const cleanId = identifier.trim().toLowerCase();
+      const matchedUser = db.users.find(u => {
+        const matchLogin = u.login && u.login.toLowerCase() === cleanId;
+        const matchPhone = u.phone && u.phone.replace(/\s+/g, '') === cleanId.replace(/\s+/g, '');
+        return (matchLogin || matchPhone) && u.password === password;
+      });
+
+      if (!matchedUser) {
+        showLoginError('Identifiant ou mot de passe incorrect. Vérifiez vos accès.');
+        return;
+      }
+
+      if (matchedUser.active === false) {
+        showLoginError('Ce compte utilisateur est désactivé. Contactez l\'administrateur.');
+        return;
+      }
+
+      db.activeUserId = matchedUser.id;
+      saveDB();
+
+      if (remember) {
+        localStorage.setItem(SESSION_KEY, matchedUser.id);
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+      }
+
+      enterAuthenticatedApp(matchedUser);
+      showToast(`Bienvenue ${matchedUser.name} !`, 'success');
+    }
+
+    function enterAuthenticatedApp(user) {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('authenticated-shell').classList.remove('hidden');
+      renderHeaderUserInfo();
+      navigate('scan-plate');
+    }
+
+    function logoutUser() {
+      stopCameraStream();
+      closeModal();
+      db.activeUserId = null;
+      localStorage.removeItem(SESSION_KEY);
+      saveDB();
+
+      document.getElementById('authenticated-shell').classList.add('hidden');
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('login-password').value = '';
+      hideLoginError();
+      showToast('Session fermée. Vous êtes déconnecté.', 'info');
+    }
+
+    function renderHeaderUserInfo() {
+      const user = getActiveUser();
+      if (!user) return;
+
+      const roleBadge = document.getElementById('header-role-badge');
+      const subtitle = document.getElementById('header-user-subtitle');
+      const adminLabel = document.getElementById('nav-admin-label');
+
+      if (user.role === 'admin') {
+        roleBadge.textContent = '👑 Admin';
+        roleBadge.className = 'text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-amber-500/20 text-amber-500';
+        subtitle.textContent = user.name;
+        adminLabel.textContent = 'Admin/Fin.';
+      } else {
+        roleBadge.textContent = '🧼 Lavagiste';
+        roleBadge.className = 'text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase bg-cyan-500/20 text-cyan-500';
+        subtitle.textContent = user.name;
+        adminLabel.textContent = 'Mon Profil';
+      }
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const icon = document.getElementById('theme-icon');
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        icon.className = 'fa-solid fa-moon text-xs';
+      } else {
+        html.classList.add('dark');
+        icon.className = 'fa-solid fa-sun text-xs';
+      }
+    }
+
+    // ============================================================================
+    // SYSTEME DE NOTIFICATION & MODALE
+    // ============================================================================
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const colors = {
+        success: 'bg-emerald-600 text-white border-emerald-400/40',
+        error: 'bg-rose-600 text-white border-rose-400/40',
+        info: 'bg-slate-900 dark:bg-cyan-950 text-cyan-100 border-cyan-500/40',
+        warning: 'bg-amber-500 text-slate-950 border-amber-300'
+      };
+      const icons = {
+        success: 'fa-circle-check',
+        error: 'fa-circle-exclamation',
+        info: 'fa-circle-info',
+        warning: 'fa-triangle-exclamation'
+      };
+      const el = document.createElement('div');
+      el.className = `px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 transform translate-y-0 opacity-100 ${colors[type] || colors.info}`;
+      el.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm"></i><span class="flex-1">${message}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(-10px)';
+        setTimeout(() => el.remove(), 300);
+      }, 3200);
+    }
+
+    function openModal(title, htmlContent) {
+      document.getElementById('modal-title').innerHTML = title;
+      document.getElementById('modal-body').innerHTML = htmlContent;
+      const overlay = document.getElementById('modal-overlay');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+    }
+
+    function closeModal() {
+      const overlay = document.getElementById('modal-overlay');
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+    }
+
+    // ============================================================================
+    // GESTION CAMÉRA WEB (getUserMedia) & ARRÊT PROPRE
+    // ============================================================================
+    function stopCameraStream() {
+      if (activeMediaStream) {
+        activeMediaStream.getTracks().forEach(track => track.stop());
+        activeMediaStream = null;
+      }
+    }
+
+    async function startCameraInElement(videoElementId, fallbackOverlayId) {
+      stopCameraStream();
+      const videoEl = document.getElementById(videoElementId);
+      const fallbackEl = document.getElementById(fallbackOverlayId);
+      if (!videoEl) return;
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (fallbackEl) fallbackEl.classList.remove('hidden');
+        showToast('Caméra non disponible sur cet appareil', 'warning');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+        activeMediaStream = stream;
+        videoEl.srcObject = stream;
+        await videoEl.play();
+        if (fallbackEl) fallbackEl.classList.add('hidden');
+        
+        const stopBtn = document.getElementById('btn-stop-plate-cam');
+        if (stopBtn) stopBtn.classList.remove('hidden');
+        showToast('Caméra activée', 'info');
+      } catch (err) {
+        // Caméra indisponible ou permission refusée -> mode simulation actif
+        if (fallbackEl) fallbackEl.classList.remove('hidden');
+        showToast('Accès caméra refusé ou indisponible', 'warning');
+      }
+    }
+
+    function stopPlateCameraUI() {
+      stopCameraStream();
+      const fallbackEl = document.getElementById('plate-camera-fallback');
+      const stopBtn = document.getElementById('btn-stop-plate-cam');
+      if (fallbackEl) fallbackEl.classList.remove('hidden');
+      if (stopBtn) stopBtn.classList.add('hidden');
+      showToast('Caméra coupée', 'info');
+    }
+
+    // ============================================================================
+    // DÉTECTION FORMAT DE PLAQUE (ALGÉRIE, EUROPE, INTERNATIONAL)
+    // ============================================================================
+    function detectPlateFormat(raw) {
+      const clean = raw.trim().toUpperCase().replace(/\s+/g, '-');
+      // Format Algérie : 00482-123-16 (5 chiffres - 3 chiffres - 2 chiffres wilaya)
+      if (/^\d{4,6}-\d{3}-\d{2}$/.test(clean)) {
+        return { formatted: clean, type: 'DZ', label: 'Algérie (DZ)' };
+      }
+      // Format Europe (SIV France / UE) : AB-458-CD
+      if (/^[A-Z]{2}-\d{3}-[A-Z]{2}$/.test(clean) || /^[A-Z]{1,3}-[A-Z]{1,2}-\d{2,4}$/.test(clean)) {
+        return { formatted: clean, type: 'EU', label: 'Europe (EU)' };
+      }
+      return { formatted: clean, type: 'INTL', label: 'International' };
+    }
+
+    function renderPlateBadge(plate, type) {
+      if (type === 'DZ') {
+        return `<span class="plate-dz px-2.5 py-0.5 rounded-md text-xs font-extrabold shadow-sm inline-block">${plate}</span>`;
+      }
+      if (type === 'EU') {
+        return `<span class="plate-eu pr-2.5 py-0.5 rounded-md text-xs font-extrabold shadow-sm inline-block">${plate}</span>`;
+      }
+      return `<span class="plate-intl px-2.5 py-0.5 rounded-md text-xs font-extrabold shadow-sm inline-block">${plate}</span>`;
+    }
+
+    // ============================================================================
+    // NAVIGATION & ROUTEUR PRINCIPAL
+    // ============================================================================
+    function navigate(route) {
+      stopCameraStream();
+      currentRoute = route;
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        const isActive = btn.dataset.nav === route;
+        if (btn.dataset.nav !== 'scan-barcode') {
+          btn.classList.toggle('text-cyan-500', isActive);
+          btn.classList.toggle('text-slate-400', !isActive);
         }
+      });
+      renderCurrentRoute();
+    }
 
-        function renderNav() {
-            const v = appState.currentView;
-            return `
-                <nav class="absolute bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 px-2 py-2 flex justify-around items-center z-30">
-                    <button onclick="switchView('home')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='home'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-house text-lg mb-0.5"></i>
-                        <span class="text-[10px] font-medium">Accueil</span>
-                    </button>
-                    <button onclick="switchView('clients')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='clients'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-users text-lg mb-0.5"></i>
-                        <span class="text-[10px] font-medium">Clients</span>
-                    </button>
-                    <button onclick="switchView('billing')" class="flex flex-col items-center justify-center -mt-6 w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 border-4 border-slate-950 transition hover:bg-blue-500">
-                        <i class="fa-solid fa-cash-register text-lg"></i>
-                    </button>
-                    <button onclick="switchView('journal')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='journal'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-book text-lg mb-0.5"></i>
-                        <span class="text-[10px] font-medium">Journal</span>
-                    </button>
-                    ${appState.currentUser.role === 'admin' ? `
-                    <button onclick="switchView('admin')" class="flex flex-col items-center py-1 px-3 rounded-xl transition ${v==='admin'?'text-blue-500':'text-slate-400 hover:text-slate-200'}">
-                        <i class="fa-solid fa-gear text-lg mb-0.5"></i>
-                        <span class="text-[10px] font-medium">Admin</span>
-                    </button>` : ''}
-                </nav>
-            `;
-        }
+    function renderCurrentRoute() {
+      const container = document.getElementById('main-content');
+      if (!container) return;
 
-        function switchView(viewName) {
-            appState.currentView = viewName;
-            renderApp();
-        }
+      if (currentRoute === 'scan-plate') renderScanPlateView(container);
+      else if (currentRoute === 'clients') renderClientsView(container);
+      else if (currentRoute === 'scan-barcode') renderScanBarcodeView(container);
+      else if (currentRoute === 'catalog') renderCatalogView(container);
+      else if (currentRoute === 'admin') renderAdminFinanceView(container);
+    }
 
-        // --- VUE ACCUEIL (AVEC QUANTITÉS RESTANTES & SCAN CODE BARRE / QR) ---
-        function renderHomeView() {
-            return `
-                <div class="space-y-6">
-                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
-                        <h3 class="text-sm font-semibold text-white mb-3 flex items-center">
-                            <i class="fa-solid fa-magnifying-glass text-blue-500 mr-2"></i> Recherche & Entrée Véhicule
-                        </h3>
-                        <div class="space-y-3">
-                            <div class="relative">
-                                <input type="text" id="search-plate-input" oninput="filterVehicles(this.value)" placeholder="Entrer plaque, nom ou modèle..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 uppercase">
-                                <i class="fa-solid fa-car absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
-                            </div>
-                            <div class="flex space-x-2">
-                                <button onclick="openPlateScanner()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-2.5 rounded-xl font-medium transition flex items-center justify-center shadow-md shadow-blue-600/20">
-                                    <i class="fa-solid fa-qrcode mr-2"></i> Scanner / Plaque / QR
-                                </button>
-                                <button onclick="openNewClientModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-blue-400 py-2.5 rounded-xl font-medium transition flex items-center justify-center">
-                                    <i class="fa-solid fa-user-plus mr-2"></i> Nouveau Client
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+    // ============================================================================
+    // VUE 1 : ACCUEIL & SCANNER DE PLAQUES D'IMMATRICULATION (CAMÉRA EN VEILLE)
+    // ============================================================================
+    function renderScanPlateView(container) {
+      const todayIncome = db.transactions
+        .filter(t => t.type === 'income' && t.date === todayISO)
+        .reduce((sum, t) => sum + t.amount, 0);
+      const dueOilCount = db.clients.filter(c => (c.nextOilKm - c.currentKm) <= 1000).length;
+      const lowStockCount = db.catalog.filter(i => i.category !== 'service' && i.stock <= 12).length;
 
-                    <div id="search-results-container" class="space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Véhicules Récents & Stocks Restants</h4>
-                        ${renderVehicleList(appState.vehicles)}
-                    </div>
-                </div>
-            `;
-        }
+      container.innerHTML = `
+        <!-- Indicateurs rapides du jour -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-white dark:bg-slateDark-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <p class="text-[10px] font-bold uppercase text-slate-400">Recette Jour</p>
+            <p class="text-xs sm:text-sm font-extrabold text-emerald-500 mt-1 truncate">${formatPrice(todayIncome)}</p>
+          </div>
+          <div onclick="navigate('clients')" class="cursor-pointer bg-white dark:bg-slateDark-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 transition">
+            <p class="text-[10px] font-bold uppercase text-slate-400">Alertes Vidange</p>
+            <p class="text-base font-extrabold ${dueOilCount > 0 ? 'text-amber-500' : 'text-slate-400'} mt-0.5">${dueOilCount} <span class="text-[10px] font-normal">véh.</span></p>
+          </div>
+          <div onclick="navigate('catalog')" class="cursor-pointer bg-white dark:bg-slateDark-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-rose-500/40 transition">
+            <p class="text-[10px] font-bold uppercase text-slate-400">Stock Bas</p>
+            <p class="text-base font-extrabold ${lowStockCount > 0 ? 'text-rose-500' : 'text-emerald-500'} mt-0.5">${lowStockCount} <span class="text-[10px] font-normal">art.</span></p>
+          </div>
+        </div>
 
-        function renderVehicleList(vehiclesList) {
-            if(vehiclesList.length === 0) {
+        <!-- File d'attente en direct (Postes Lavage & Vidange) -->
+        <div class="bg-white dark:bg-slateDark-900 p-3.5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <h3 class="text-xs font-extrabold uppercase tracking-wider">Pistes en cours (${db.activeQueue.length})</h3>
+            </div>
+            <button onclick="openAddToQueueModal()" class="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-cyan-500/15 text-cyan-500 hover:bg-cyan-500/25 transition">
+              + Ajouter véhicule
+            </button>
+          </div>
+
+          ${db.activeQueue.length === 0 ? `
+            <p class="text-xs text-slate-400 text-center py-3">Aucun véhicule actuellement sur les pistes.</p>
+          ` : `
+            <div class="space-y-2">
+              ${db.activeQueue.map(q => {
+                const isReady = q.status === 'ready';
                 return `
-                    <div class="text-center py-10 bg-slate-900/40 rounded-2xl border border-slate-800">
-                        <i class="fa-solid fa-car-side text-3xl text-slate-600 mb-2"></i>
-                        <p class="text-sm text-slate-400">Aucun véhicule trouvé.</p>
+                  <div class="p-2.5 rounded-2xl bg-slate-100/80 dark:bg-slate-800/60 border ${isReady ? 'border-emerald-500/40' : 'border-slate-200 dark:border-slate-700/70'} flex items-center justify-between gap-2">
+                    <div class="min-w-0 space-y-1">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        ${renderPlateBadge(q.plate, q.plateType)}
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isReady ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">
+                          ${isReady ? '✅ Prêt' : '🚿 En cours'} • ${q.bay}
+                        </span>
+                      </div>
+                      <p class="text-xs font-bold truncate">${q.vehicle} <span class="text-slate-400 font-normal">• ${q.service}</span></p>
                     </div>
-                `;
-            }
-            return vehiclesList.map(v => {
-                const client = appState.clients.find(c => c.id === v.clientId) || { name: 'Client Inconnu', phone: '' };
-                const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
-                
-                // Récupération des articles restants du catalogue associés aux derniers passages ou affichage des stocks globaux rapides
-                const lowStockItems = appState.catalog.filter(item => item.stock <= 10);
-
-                return `
-                    <div onclick="openVehicleDetail(${v.id})" class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-2xl p-4 cursor-pointer transition shadow-md space-y-2">
-                        <div class="flex justify-between items-start">
-                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
-                                <span class="text-base">${countryMeta.flag}</span>
-                                <span class="font-mono font-bold text-white text-sm tracking-wide">${v.plate}</span>
-                            </div>
-                            <span class="text-xs text-blue-400 font-medium">${v.mileage.toLocaleString()} km</span>
-                        </div>
-                        <div class="flex justify-between items-end">
-                            <div>
-                                <h4 class="text-sm font-semibold text-white">${v.model}</h4>
-                                <p class="text-xs text-slate-400"><i class="fa-solid fa-user mr-1"></i> ${client.name} (${client.phone})</p>
-                            </div>
-                            <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg">Historique <i class="fa-solid fa-chevron-right ml-1"></i></span>
-                        </div>
-                        <!-- Affichage des stocks restants d'articles critiques -->
-                        <div class="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
-                            <span class="text-slate-400"><i class="fa-solid fa-boxes-stacked mr-1 text-amber-500"></i> Stocks restants catalogue :</span>
-                            <span class="font-bold text-emerald-400">${appState.catalog.reduce((acc, i) => acc + i.stock, 0)} unités totales</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function filterVehicles(query) {
-            const q = query.toLowerCase();
-            const filtered = appState.vehicles.filter(v => {
-                const client = appState.clients.find(c => c.id === v.clientId) || {};
-                return v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q) || (client.name && client.name.toLowerCase().includes(q));
-            });
-            document.getElementById('search-results-container').innerHTML = `
-                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Résultats de recherche</h4>
-                ${renderVehicleList(filtered)}
-            `;
-        }
-
-        // --- SCANNER UNIFIÉ (PLAQUE, CODE-BARRE & QR CODE) ---
-        function openPlateScanner() {
-            closePlateScanner();
-            const modal = document.createElement('div');
-            modal.id = 'scanner-modal';
-            modal.className = 'fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4';
-            modal.innerHTML = `
-                <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white"><i class="fa-solid fa-qrcode text-blue-500 mr-2"></i>Scanner Plaque, Code-barre ou QR</h3>
-                        <button onclick="closePlateScanner()" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-
-                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <p class="text-xs text-slate-300">Scannez un code produit (barre / QR) ou saisissez/prenez en photo une plaque :</p>
-                        
-                        <input id="scan-plate-result" type="text" placeholder="Ex: 01234-116-16 ou Code produit" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-base text-white font-mono uppercase focus:outline-none focus:border-blue-500 tracking-wider text-center">
-
-                        <div class="flex space-x-2 pt-1">
-                            <label class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs text-white py-3 rounded-xl font-medium text-center cursor-pointer block shadow-md shadow-blue-600/30">
-                                <i class="fa-solid fa-camera-retro mr-1.5"></i> Photo / Scanner
-                                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleBarcodeOrPlateCapture(this)">
-                            </label>
-                            <button onclick="confirmScannedCode()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white py-3 rounded-xl font-medium shadow-md shadow-emerald-600/30">
-                                <i class="fa-solid fa-check mr-1.5"></i> Valider
-                            </button>
-                        </div>
-                    </div>
-                    <p class="text-[11px] text-slate-500 text-center">Reconnaît les plaques d'immatriculation ainsi que les codes-barres et QR codes des articles en stock.</p>
-                </div>`;
-            document.body.appendChild(modal);
-            setTimeout(() => { document.getElementById('scan-plate-result')?.focus(); }, 100);
-        }
-
-        function closePlateScanner() {
-            const m = document.getElementById('scanner-modal');
-            if (m) m.remove();
-        }
-
-        function handleBarcodeOrPlateCapture(input) {
-            const file = input.files && input.files[0];
-            if (!file) return;
-            // Simulation intelligente de décodage code-barre/QR ou plaque depuis la photo prise
-            const inputField = document.getElementById('scan-plate-result');
-            if(inputField) {
-                inputField.placeholder = "Code/Plaque capturé en image";
-            }
-            input.value = '';
-        }
-
-        function confirmScannedCode() {
-            const input = document.getElementById('scan-plate-result');
-            const codeVal = (input ? input.value : '').trim().toUpperCase();
-            if (!codeVal) {
-                alert("Veuillez saisir ou scanner un code.");
-                return;
-            }
-            closePlateScanner();
-
-            // Vérifier si c'est un article du catalogue (par code ou nom)
-            const catalogItem = appState.catalog.find(c => c.name.toUpperCase().includes(codeVal) || c.id.toString() === codeVal);
-            if (catalogItem) {
-                alert(`Article trouvé en stock : ${catalogItem.name} (${catalogItem.stock} restants, ${catalogItem.price} DA)`);
-                return;
-            }
-
-            // Sinon, traiter comme une plaque d'immatriculation véhicule
-            const norm = p => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            const existing = appState.vehicles.find(v => norm(v.plate) === norm(codeVal));
-            if (existing) {
-                openVehicleDetail(existing.id);
-                return;
-            }
-
-            if (!confirm(`Le code/plaque "${codeVal}" est inconnu. Enregistrer un nouveau véhicule ?`)) return;
-            
-            const name = prompt("Nom complet du client :", "") || "Client " + codeVal;
-            const phone = prompt("Numéro de téléphone :", "+213 ") || "";
-            const model = prompt("Modèle du véhicule :", "") || "Véhicule";
-            const mileageInput = prompt("Kilométrage actuel :", "0");
-            const mileage = parseInt(mileageInput) || 0;
-            const country = codeVal.includes('-') && codeVal.length >= 10 ? 'DZ' : 'EU';
-
-            const newClientId = Math.max(0, ...appState.clients.map(c => c.id)) + 1;
-            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
-            
-            const newVehId = Math.max(0, ...appState.vehicles.map(v => v.id)) + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate: codeVal, model, mileage, country });
-            
-            saveState();
-            renderApp();
-            openVehicleDetail(newVehId);
-        }
-
-        // --- VUE DETAIL VEHICULE & HISTORIQUE ---
-        let selectedVehicleId = null;
-        function openVehicleDetail(vehId) {
-            selectedVehicleId = vehId;
-            appState.currentView = 'vehicle_detail';
-            renderApp();
-        }
-
-        function updateVehicleMileage(vehId) {
-            const v = appState.vehicles.find(item => item.id === vehId);
-            if (!v) return;
-            const newKmInput = prompt(`Modifier le kilométrage pour ${v.plate} :`, v.mileage);
-            if (newKmInput === null) return;
-            const newKm = parseInt(newKmInput);
-            if (isNaN(newKm) || newKm < 0) {
-                alert("Kilométrage invalide.");
-                return;
-            }
-            v.mileage = newKm;
-            saveState();
-            renderApp();
-        }
-
-        function renderVehicleDetailView() {
-            const v = appState.vehicles.find(item => item.id === selectedVehicleId);
-            if(!v) return `<p class="text-center text-slate-400">Véhicule introuvable.</p>`;
-            const client = appState.clients.find(c => c.id === v.clientId) || {};
-            const passages = appState.passages.filter(p => p.vehicleId === v.id);
-            const countryMeta = COUNTRY_META[v.country] || COUNTRY_META['DZ'];
-
-            return `
-                <div class="space-y-6">
-                    <button onclick="switchView('home')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                        <i class="fa-solid fa-arrow-left mr-2"></i> Retour à l'accueil
-                    </button>
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-                        <div class="flex justify-between items-start">
-                            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center space-x-2">
-                                <span class="text-lg">${countryMeta.flag}</span>
-                                <span class="font-mono font-bold text-white text-base tracking-wide">${v.plate}</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full font-medium">${v.mileage.toLocaleString()} km</span>
-                                <button onclick="updateVehicleMileage(${v.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded-lg text-xs border border-slate-700" title="Modifier le kilométrage">
-                                    <i class="fa-solid fa-pen-to-square"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-white">${v.model}</h3>
-                            <p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-user mr-1"></i> ${client.name} — <i class="fa-solid fa-phone ml-2 mr-1"></i> ${client.phone}</p>
-                        </div>
-                        <div class="pt-2 border-t border-slate-800 flex space-x-2">
-                            <button onclick="quickInvoiceForVehicle(${v.id})" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition shadow-md shadow-blue-600/20 flex items-center justify-center">
-                                <i class="fa-solid fa-cash-register mr-2"></i> Encaisser Prestation
-                            </button>
-                        </div>
-                    </div>
-                    <div class="space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique Lavages & Vidanges</h4>
-                        ${passages.length === 0 ? `<p class="text-xs text-slate-400 text-center py-6">Aucun historique.</p>` : passages.map(p => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                                <div class="flex justify-between items-center text-xs">
-                                    <span class="text-slate-400"><i class="fa-solid fa-calendar mr-1"></i> ${p.date}</span>
-                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
-                                </div>
-                                <div class="flex flex-wrap gap-1.5 pt-1">
-                                    ${p.items.map(i => `<span class="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] px-2 py-0.5 rounded-lg">${i}</span>`).join('')}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- VUE CLIENTS ---
-        function renderClientsView() {
-            return `
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-sm font-semibold text-white">Répertoire Clients (${appState.clients.length})</h3>
-                        <button onclick="openNewClientModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-2 rounded-xl transition">
-                            <i class="fa-solid fa-user-plus mr-1"></i> Nouveau
+                    <div class="flex items-center gap-1 shrink-0">
+                      ${!isReady ? `
+                        <button onclick="markQueueReady('${q.id}')" title="Marquer prêt" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-[10px] font-bold">
+                          Prêt
                         </button>
+                      ` : `
+                        <button onclick="checkoutQueueItem('${q.id}')" title="Encaisser" class="px-2.5 py-1.5 rounded-xl bg-cyan-600 text-white text-[10px] font-bold">
+                          Encaisser
+                        </button>
+                      `}
+                      <button onclick="removeQueueItem('${q.id}')" title="Retirer" class="w-7 h-7 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-400 hover:text-rose-500 text-xs flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
                     </div>
-                    <div class="space-y-3">
-                        ${appState.clients.map(c => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <h4 class="text-sm font-bold text-white">${c.name}</h4>
-                                        <p class="text-xs text-slate-400"><i class="fa-solid fa-phone mr-1"></i> ${c.phone}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="text-xs font-bold text-emerald-400">${c.totalSpent.toLocaleString()} DA</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- Module Scanner de Plaque (Caméra en veille au démarrage) -->
+        <div class="bg-white dark:bg-slateDark-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg">
+          <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+              <h2 class="text-xs font-extrabold uppercase tracking-wider">Scanner Plaque d'Immatriculation</h2>
+            </div>
+            <span class="text-[10px] font-bold text-slate-400">DZ • EU • INTL</span>
+          </div>
+
+          <!-- Zone Vidéo / Simulation Caméra -->
+          <div class="relative h-48 bg-slate-950 flex items-center justify-center overflow-hidden">
+            <video id="plate-camera-video" class="w-full h-full object-cover opacity-80" playsinline muted></video>
+            
+            <!-- Bouton flottant pour couper la caméra lorsqu'elle est active -->
+            <button id="btn-stop-plate-cam" onclick="stopPlateCameraUI()" class="hidden absolute top-2.5 right-2.5 z-20 px-2.5 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-[10px] font-bold shadow flex items-center gap-1">
+              <i class="fa-solid fa-video-slash"></i>
+              <span>Couper cam</span>
+            </button>
+
+            <!-- État initial : Caméra en veille jusqu'au clic -->
+            <div id="plate-camera-fallback" class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950 flex flex-col items-center justify-center p-4 text-center z-10">
+              <div class="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-2">
+                <i class="fa-solid fa-camera text-xl text-cyan-400"></i>
+              </div>
+              <p class="text-xs text-slate-200 font-bold">Caméra en veille (économie d'énergie)</p>
+              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour ouvrir la caméra ou simuler un scan</p>
+              <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
+                <i class="fa-solid fa-video"></i>
+                <span>Activer la caméra</span>
+              </button>
+            </div>
+
+            <!-- Cadre de ciblage plaque -->
+            <div class="absolute inset-x-8 inset-y-10 border-2 border-cyan-400/40 rounded-xl pointer-events-none flex items-center justify-center">
+              <div class="scanner-laser"></div>
+            </div>
+          </div>
+
+          <!-- Boutons de simulation OCR instantanée -->
+          <div class="p-3.5 bg-slate-100/70 dark:bg-slate-900/80 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <button onclick="simulatePlateScan()" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
+                <i class="fa-solid fa-expand"></i>
+                <span>Simuler Scan Plaque OCR</span>
+              </button>
+              <button onclick="startCameraInElement('plate-camera-video', 'plate-camera-fallback')" title="Activer la caméra" class="py-2.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-video text-cyan-500"></i>
+                <span>Caméra</span>
+              </button>
+            </div>
+
+            <!-- Raccourcis de test rapide -->
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+              <span class="text-[10px] text-slate-400 whitespace-nowrap font-semibold">Test rapide :</span>
+              <button onclick="processScannedPlate('00482-123-16')" class="text-[10px] font-mono px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 whitespace-nowrap hover:border-cyan-500">00482-123-16 (DZ)</button>
+              <button onclick="processScannedPlate('AB-458-CD')" class="text-[10px] font-mono px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 whitespace-nowrap hover:border-cyan-500">AB-458-CD (EU)</button>
+              <button onclick="processScannedPlate('24510-125-06')" class="text-[10px] font-mono px-2 py-1 rounded bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 whitespace-nowrap">+ Nouveau DZ</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Saisie Manuelle Directe -->
+        <div class="bg-white dark:bg-slateDark-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            Ou saisir le numéro de plaque
+          </label>
+          <form onsubmit="handleManualPlateSubmit(event)" class="flex gap-2">
+            <input id="manual-plate-input" type="text" placeholder="Ex: 00123-124-16 ou AB-123-CD" required
+              class="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-sm uppercase focus:outline-none focus:border-cyan-500" />
+            <button type="submit" class="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-cyan-600 text-white font-bold text-xs hover:opacity-90 transition">
+              Vérifier
+            </button>
+          </form>
+        </div>
+
+        <!-- Derniers Véhicules Passés -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Passages Récents</h3>
+            <button onclick="navigate('clients')" class="text-xs font-semibold text-cyan-500">Voir tout →</button>
+          </div>
+          <div class="space-y-2">
+            ${db.clients.slice(0, 3).map(c => renderClientSummaryCard(c)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function openAddToQueueModal() {
+      openModal('Placer un Véhicule sur Piste', `
+        <form onsubmit="submitAddToQueue(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Véhicule client *</label>
+            <select name="clientId" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+              ${db.clients.map(c => `<option value="${c.id}">${c.plate} — ${c.vehicle} (${c.name})</option>`).join('')}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold mb-1">Poste / Piste *</label>
+              <select name="bay" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+                <option value="Piste Lavage 1">🚿 Piste Lavage 1</option>
+                <option value="Piste Lavage 2">🚿 Piste Lavage 2</option>
+                <option value="Zone Intérieur">🧽 Zone Intérieur</option>
+                <option value="Pont Vidange">🛢️ Pont Vidange</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Prestation prévue *</label>
+              <select name="service" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+                ${db.catalog.filter(i => i.category === 'service').map(s => `<option value="${s.name}">${s.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="w-full py-3 rounded-xl bg-cyan-600 text-white font-bold text-xs shadow-lg">
+            Démarrer la prise en charge
+          </button>
+        </form>
+      `);
+    }
+
+    function submitAddToQueue(e) {
+      e.preventDefault();
+      const f = e.target;
+      const client = db.clients.find(c => c.id === f.clientId.value);
+      if (!client) return;
+      const timeStr = new Date().toTimeString().slice(0, 5);
+      db.activeQueue.unshift({
+        id: 'q_' + Date.now(),
+        clientId: client.id,
+        plate: client.plate,
+        plateType: client.plateType,
+        clientName: client.name,
+        vehicle: client.vehicle,
+        bay: f.bay.value,
+        service: f.service.value,
+        status: 'washing',
+        startTime: timeStr
+      });
+      saveDB();
+      closeModal();
+      showToast(`${client.plate} placé sur ${f.bay.value}`, 'success');
+      renderCurrentRoute();
+    }
+
+    function markQueueReady(queueId) {
+      const q = db.activeQueue.find(item => item.id === queueId);
+      if (!q) return;
+      q.status = 'ready';
+      saveDB();
+      showToast(`Véhicule ${q.plate} prêt pour remise des clés !`, 'success');
+      renderCurrentRoute();
+    }
+
+    function checkoutQueueItem(queueId) {
+      const q = db.activeQueue.find(item => item.id === queueId);
+      if (!q) return;
+      db.activeQueue = db.activeQueue.filter(item => item.id !== queueId);
+      saveDB();
+      openNewTicketModal(q.clientId);
+      renderCurrentRoute();
+    }
+
+    function removeQueueItem(queueId) {
+      db.activeQueue = db.activeQueue.filter(item => item.id !== queueId);
+      saveDB();
+      renderCurrentRoute();
+    }
+
+    function simulatePlateScan() {
+      const samplePlates = [
+        '00482-123-16',
+        'AB-458-CD',
+        '12940-121-31',
+        '09841-126-16', // Nouveau client DZ
+        'GH-892-TY'     // Nouveau client EU
+      ];
+      const randomPlate = samplePlates[Math.floor(Math.random() * samplePlates.length)];
+      showToast(`Plaque détectée par OCR : ${randomPlate}`, 'info');
+      processScannedPlate(randomPlate);
+    }
+
+    function handleManualPlateSubmit(e) {
+      e.preventDefault();
+      const val = document.getElementById('manual-plate-input').value;
+      if (!val.trim()) return;
+      processScannedPlate(val);
+    }
+
+    function processScannedPlate(rawPlate) {
+      const detected = detectPlateFormat(rawPlate);
+      const existing = db.clients.find(c => c.plate.toUpperCase() === detected.formatted);
+
+      if (existing) {
+        openClientDetailModal(existing.id);
+      } else {
+        openNewClientModal(detected.formatted, detected.type);
+      }
+    }
+
+    // ============================================================================
+    // FICHE CLIENT, HISTORIQUE, PARAMÈTRES VIDANGE & NOUVEAU TICKET
+    // ============================================================================
+    function renderClientSummaryCard(client) {
+      const kmRemaining = client.nextOilKm - client.currentKm;
+      let statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">OK (${kmRemaining.toLocaleString()} km)</span>`;
+      if (kmRemaining <= 0) {
+        statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-500 animate-pulse"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Vidange dépassée !</span>`;
+      } else if (kmRemaining <= 1000) {
+        statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500">Vidange dans ${kmRemaining} km</span>`;
+      }
+
+      return `
+        <div onclick="openClientDetailModal('${client.id}')" class="cursor-pointer bg-white dark:bg-slateDark-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-cyan-500/50 transition flex items-center justify-between gap-3">
+          <div class="space-y-1.5 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              ${renderPlateBadge(client.plate, client.plateType)}
+              ${statusBadge}
+            </div>
+            <p class="font-bold text-sm truncate">${client.name} <span class="font-normal text-slate-400">• ${client.vehicle}</span></p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+              Compteur : <strong class="text-slate-700 dark:text-slate-200">${client.currentKm.toLocaleString()} km</strong> • Proch. vidange : <strong>${client.nextOilKm.toLocaleString()} km</strong>
+            </p>
+          </div>
+          <i class="fa-solid fa-chevron-right text-slate-400 text-xs"></i>
+        </div>
+      `;
+    }
+
+    function openClientDetailModal(clientId) {
+      const c = db.clients.find(item => item.id === clientId);
+      if (!c) return;
+
+      const kmDiff = c.nextOilKm - c.currentKm;
+      const alertBox = kmDiff <= 1000
+        ? `<div class="p-3 rounded-2xl ${kmDiff <= 0 ? 'bg-rose-500/15 border-rose-500/40 text-rose-400' : 'bg-amber-500/15 border-amber-500/40 text-amber-400'} border text-xs font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-oil-can text-base"></i>
+            <span>${kmDiff <= 0 ? `Attention : Vidange dépassée de ${Math.abs(kmDiff).toLocaleString()} km !` : `Vidange recommandée très bientôt (reste ${kmDiff.toLocaleString()} km).`}</span>
+          </div>`
+        : '';
+
+      const oils = db.catalog.filter(i => i.category === 'oil');
+
+      openModal(`Fiche Véhicule • ${c.plate}`, `
+        <div class="space-y-4">
+          <!-- En-tête Plaque & Client -->
+          <div class="flex items-center justify-between bg-slate-100 dark:bg-slate-800/70 p-3.5 rounded-2xl">
+            <div>
+              ${renderPlateBadge(c.plate, c.plateType)}
+              <h4 class="font-extrabold text-base mt-2">${c.name}</h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400">${c.vehicle} • <i class="fa-solid fa-phone text-[10px]"></i> ${c.phone}</p>
+            </div>
+            <button onclick="openNewTicketModal('${c.id}')" class="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex flex-col items-center gap-1">
+              <i class="fa-solid fa-plus-circle text-base"></i>
+              <span>Nouveau Lavage / Vidange</span>
+            </button>
+          </div>
+
+          ${alertBox}
+
+          <!-- Paramètres d'entretien & Modification Kilométrage Vidange -->
+          <form onsubmit="updateClientMaintenance(event, '${c.id}')" class="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <h5 class="text-xs font-extrabold uppercase tracking-wider text-cyan-500">
+                <i class="fa-solid fa-sliders mr-1"></i> Paramètres Entretien & Vidange
+              </h5>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Kilométrage Actuel</label>
+                <input type="number" name="currentKm" value="${c.currentKm}" required
+                  class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-amber-500 mb-1">Prochaine Vidange (km)</label>
+                <input type="number" name="nextOilKm" value="${c.nextOilKm}" required
+                  class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-500" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Huile Moteur Recommandée</label>
+              <select name="preferredOil" class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs">
+                <option value="${c.preferredOil}">${c.preferredOil}</option>
+                ${oils.map(o => `<option value="${o.name}">${o.name} (${o.viscosity})</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Téléphone</label>
+                <input type="text" name="phone" value="${c.phone}"
+                  class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1">Modèle Véhicule</label>
+                <input type="text" name="vehicle" value="${c.vehicle}"
+                  class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs" />
+              </div>
+            </div>
+
+            <button type="submit" class="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-cyan-600 text-white font-bold text-xs hover:opacity-95 transition">
+              <i class="fa-solid fa-floppy-disk mr-1"></i> Enregistrer les paramètres
+            </button>
+          </form>
+
+          <!-- Historique des passages du client -->
+          <div class="space-y-2">
+            <h5 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+              Historique des interventions (${c.history.length})
+            </h5>
+            ${c.history.length === 0 ? `<p class="text-xs text-slate-500 italic">Aucune intervention enregistrée.</p>` : ''}
+            <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+              ${c.history.map(h => `
+                <div class="p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 text-xs space-y-1">
+                  <div class="flex items-center justify-between font-bold">
+                    <span class="text-cyan-500">${h.date} • ${Number(h.km).toLocaleString()} km</span>
+                    <span class="text-emerald-500">${formatPrice(h.total)}</span>
+                  </div>
+                  <p class="text-slate-700 dark:text-slate-200 font-medium">${h.items.join(' + ')}</p>
+                  <p class="text-[10px] text-slate-400">Opérateur : ${h.tech || 'Station'}</p>
                 </div>
-            `;
+              `).join('')}
+            </div>
+          </div>
+
+          ${isAdmin() ? `
+            <div class="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button onclick="deleteClient('${c.id}')" class="text-xs text-rose-500 font-semibold hover:underline">
+                <i class="fa-solid fa-trash mr-1"></i> Supprimer ce client
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `);
+    }
+
+    function updateClientMaintenance(e, clientId) {
+      e.preventDefault();
+      const form = e.target;
+      const c = db.clients.find(item => item.id === clientId);
+      if (!c) return;
+
+      c.currentKm = parseInt(form.currentKm.value, 10) || c.currentKm;
+      c.nextOilKm = parseInt(form.nextOilKm.value, 10) || c.nextOilKm;
+      c.preferredOil = form.preferredOil.value;
+      c.phone = form.phone.value;
+      c.vehicle = form.vehicle.value;
+
+      saveDB();
+      showToast('Paramètres et kilométrage vidange mis à jour !', 'success');
+      openClientDetailModal(clientId);
+      renderCurrentRoute();
+    }
+
+    function deleteClient(clientId) {
+      db.clients = db.clients.filter(c => c.id !== clientId);
+      saveDB();
+      closeModal();
+      showToast('Fiche client supprimée', 'warning');
+      renderCurrentRoute();
+    }
+
+    function openNewClientModal(prefilledPlate = '', plateType = 'DZ') {
+      openModal('Nouveau Véhicule Détecté', `
+        <form onsubmit="createNewClient(event)" class="space-y-3.5">
+          <div class="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between">
+            <span class="text-xs font-semibold text-cyan-500">Nouvelle immatriculation :</span>
+            ${renderPlateBadge(prefilledPlate || '00000-126-16', plateType)}
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold mb-1">Plaque d'immatriculation *</label>
+              <input type="text" name="plate" value="${prefilledPlate}" required placeholder="00123-124-16"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-sm uppercase" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Format</label>
+              <select name="plateType" class="w-full px-2.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+                <option value="DZ" ${plateType === 'DZ' ? 'selected' : ''}>Algérie (DZ)</option>
+                <option value="EU" ${plateType === 'EU' ? 'selected' : ''}>Europe (EU)</option>
+                <option value="INTL" ${plateType === 'INTL' ? 'selected' : ''}>Autre</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold mb-1">Nom & Prénom du Client *</label>
+            <input type="text" name="name" required placeholder="Ex: Mohamed Amrani"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold mb-1">Téléphone</label>
+              <input type="tel" name="phone" placeholder="0550 00 00 00"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Modèle Véhicule *</label>
+              <input type="text" name="vehicle" required placeholder="Ex: Dacia Duster"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold mb-1">Kilométrage Actuel *</label>
+              <input type="number" name="currentKm" value="50000" required
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm font-bold" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1 text-amber-500">Prochaine Vidange (km)</label>
+              <input type="number" name="nextOilKm" value="60000" required
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-amber-500/40 text-sm font-bold" />
+            </div>
+          </div>
+
+          <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-sm shadow-lg shadow-cyan-500/25">
+            Créer la fiche & Ouvrir prestation
+          </button>
+        </form>
+      `);
+    }
+
+    function createNewClient(e) {
+      e.preventDefault();
+      const f = e.target;
+      const newClient = {
+        id: 'c_' + Date.now(),
+        plate: f.plate.value.trim().toUpperCase(),
+        plateType: f.plateType.value,
+        name: f.name.value.trim(),
+        phone: f.phone.value.trim() || 'Non renseigné',
+        vehicle: f.vehicle.value.trim(),
+        currentKm: parseInt(f.currentKm.value, 10) || 0,
+        nextOilKm: parseInt(f.nextOilKm.value, 10) || 10000,
+        preferredOil: db.catalog.find(i => i.category === 'oil')?.name || '5W30 Synthétique',
+        notes: '',
+        history: []
+      };
+      db.clients.unshift(newClient);
+      saveDB();
+      showToast(`Client ${newClient.name} enregistré !`, 'success');
+      openNewTicketModal(newClient.id);
+      renderCurrentRoute();
+    }
+
+    // ============================================================================
+    // CRÉATION DE TICKET / PRESTATION (LAVAGE, VIDANGE, PRODUITS, HUILES)
+    // ============================================================================
+    function openNewTicketModal(clientId) {
+      const c = db.clients.find(item => item.id === clientId);
+      if (!c) return;
+
+      const services = db.catalog.filter(i => i.category === 'service');
+      const oils = db.catalog.filter(i => i.category === 'oil');
+      const products = db.catalog.filter(i => i.category === 'product');
+
+      openModal(`Nouvelle Prestation • ${c.plate}`, `
+        <form onsubmit="submitClientTicket(event, '${c.id}')" class="space-y-4">
+          <div class="grid grid-cols-2 gap-2.5 bg-slate-100 dark:bg-slate-800/60 p-3 rounded-2xl">
+            <div>
+              <label class="block text-[10px] font-bold uppercase text-slate-400">Compteur entrée (km)</label>
+              <input type="number" name="visitKm" value="${c.currentKm}" required
+                class="w-full mt-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase text-amber-500">Nouvelle Proch. Vidange</label>
+              <input type="number" name="updatedNextOilKm" value="${c.nextOilKm}" required
+                class="w-full mt-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-500/40 text-xs font-bold text-amber-500" />
+            </div>
+          </div>
+
+          <!-- Sélection Services -->
+          <div class="space-y-1.5">
+            <p class="text-xs font-extrabold uppercase text-cyan-500">1. Services Lavage & Vidange</p>
+            <div class="space-y-1.5 max-h-36 overflow-y-auto">
+              ${services.map(s => `
+                <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 cursor-pointer">
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" name="ticketItems" value="${s.id}" data-price="${s.price}" onchange="recalcTicketTotal()" class="rounded text-cyan-500 focus:ring-0" />
+                    <span class="text-xs font-semibold">${s.name}</span>
+                  </div>
+                  <span class="text-xs font-bold text-emerald-500">${formatPrice(s.price)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Sélection Huiles Moteur -->
+          <div class="space-y-1.5">
+            <p class="text-xs font-extrabold uppercase text-amber-500">2. Huiles Moteur</p>
+            <div class="space-y-1.5 max-h-36 overflow-y-auto">
+              ${oils.map(o => `
+                <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 cursor-pointer">
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" name="ticketItems" value="${o.id}" data-price="${o.price}" onchange="recalcTicketTotal()" class="rounded text-cyan-500 focus:ring-0" />
+                    <div>
+                      <p class="text-xs font-semibold">${o.name}</p>
+                      <p class="text-[10px] text-slate-400">${o.viscosity} • Stock: ${o.stock}</p>
+                    </div>
+                  </div>
+                  <span class="text-xs font-bold text-emerald-500">${formatPrice(o.price)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Sélection Filtres & Accessoires -->
+          <div class="space-y-1.5">
+            <p class="text-xs font-extrabold uppercase text-purple-400">3. Filtres & Produits</p>
+            <div class="space-y-1.5 max-h-36 overflow-y-auto">
+              ${products.map(p => `
+                <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 cursor-pointer">
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" name="ticketItems" value="${p.id}" data-price="${p.price}" onchange="recalcTicketTotal()" class="rounded text-cyan-500 focus:ring-0" />
+                    <span class="text-xs font-semibold">${p.name} <span class="text-[10px] text-slate-400">(${p.stock})</span></span>
+                  </div>
+                  <span class="text-xs font-bold text-emerald-500">${formatPrice(p.price)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Total Dynamique & Validation -->
+          <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div>
+              <p class="text-[10px] uppercase text-slate-400 font-bold">Total à encaisser</p>
+              <p id="ticket-live-total" class="text-lg font-extrabold text-emerald-500">${formatPrice(0)}</p>
+            </div>
+            <button type="submit" class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/25">
+              <i class="fa-solid fa-check mr-1"></i> Valider & Encaisser
+            </button>
+          </div>
+        </form>
+      `);
+    }
+
+    function recalcTicketTotal() {
+      const checked = document.querySelectorAll('input[name="ticketItems"]:checked');
+      let sum = 0;
+      checked.forEach(cb => sum += parseFloat(cb.dataset.price || 0));
+      const el = document.getElementById('ticket-live-total');
+      if (el) el.textContent = formatPrice(sum);
+    }
+
+    function submitClientTicket(e, clientId) {
+      e.preventDefault();
+      const form = e.target;
+      const c = db.clients.find(item => item.id === clientId);
+      if (!c) return;
+
+      const checked = Array.from(form.querySelectorAll('input[name="ticketItems"]:checked'));
+      if (checked.length === 0) {
+        showToast('Veuillez sélectionner au moins un service ou produit', 'warning');
+        return;
+      }
+
+      const selectedNames = [];
+      let total = 0;
+
+      checked.forEach(cb => {
+        const prod = db.catalog.find(item => item.id === cb.value);
+        if (prod) {
+          selectedNames.push(prod.name);
+          total += prod.price;
+          if (prod.category !== 'service' && prod.stock > 0) {
+            prod.stock -= 1;
+          }
+        }
+      });
+
+      const visitKm = parseInt(form.visitKm.value, 10) || c.currentKm;
+      const nextKm = parseInt(form.updatedNextOilKm.value, 10) || c.nextOilKm;
+
+      c.currentKm = visitKm;
+      c.nextOilKm = nextKm;
+
+      // Ajout à l'historique client
+      c.history.unshift({
+        id: 'h_' + Date.now(),
+        date: todayISO,
+        km: visitKm,
+        items: selectedNames,
+        total,
+        tech: getActiveUser().name
+      });
+
+      // Ajout dans la comptabilité (Recettes)
+      db.transactions.unshift({
+        id: 'tr_' + Date.now(),
+        type: 'income',
+        date: todayISO,
+        label: `${selectedNames[0]}${selectedNames.length > 1 ? ` +${selectedNames.length - 1}` : ''} (${c.plate})`,
+        amount: total,
+        category: selectedNames.some(n => n.toLowerCase().includes('vidange')) ? 'Vidange' : 'Lavage'
+      });
+
+      // Retirer de la file d'attente si présent
+      db.activeQueue = db.activeQueue.filter(q => q.clientId !== c.id);
+
+      saveDB();
+      showToast(`Ticket validé : +${formatPrice(total)} encaissés !`, 'success');
+      renderCurrentRoute();
+      openReceiptModal(c, selectedNames, total, visitKm, nextKm);
+    }
+
+    function openReceiptModal(client, items, total, visitKm, nextKm) {
+      const receiptText = `🚗 *AZ-LAVAGE - REÇU CLIENT*\n📅 Date : ${todayISO}\n🔢 Plaque : ${client.plate} (${client.vehicle})\n🛣️ Kilométrage : ${visitKm.toLocaleString()} km\n🛢️ Prochaine vidange : ${nextKm.toLocaleString()} km\n━━━━━━━━━━━━━━\n${items.map(i => `• ${i}`).join('\n')}\n━━━━━━━━━━━━━━\n💰 *TOTAL PAYÉ : ${formatPrice(total)}*\nMerci pour votre confiance !`;
+
+      openModal('Reçu & Rappel Vidange', `
+        <div class="space-y-4">
+          <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-dashed border-slate-300 dark:border-slate-700 font-mono text-xs space-y-2">
+            <div class="text-center border-b border-dashed border-slate-300 dark:border-slate-800 pb-2">
+              <p class="font-extrabold text-sm text-cyan-500">AZ-LAVAGE STATION PRO</p>
+              <p class="text-[10px] text-slate-400">Ticket #${Date.now().toString().slice(-6)} • ${todayISO}</p>
+            </div>
+            <div class="space-y-1 text-[11px]">
+              <p><strong>Client :</strong> ${client.name}</p>
+              <p><strong>Véhicule :</strong> ${client.vehicle} [${client.plate}]</p>
+              <p><strong>Compteur :</strong> ${visitKm.toLocaleString()} km</p>
+              <p class="text-amber-500"><strong>Prochaine vidange :</strong> ${nextKm.toLocaleString()} km</p>
+            </div>
+            <div class="border-t border-dashed border-slate-300 dark:border-slate-800 pt-2 space-y-1">
+              ${items.map(name => `<div class="flex justify-between"><span>• ${name}</span><span>✓</span></div>`).join('')}
+            </div>
+            <div class="border-t border-dashed border-slate-300 dark:border-slate-800 pt-2 flex justify-between text-sm font-extrabold text-emerald-500">
+              <span>TOTAL ENCAISSÉ</span>
+              <span>${formatPrice(total)}</span>
+            </div>
+          </div>
+
+          <textarea id="receipt-copy-buffer" class="sr-only">${receiptText}</textarea>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button onclick="copyReceiptToClipboard()" class="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow">
+              <i class="fa-brands fa-whatsapp text-sm"></i>
+              <span>Copier Reçu SMS/WA</span>
+            </button>
+            <button onclick="closeModal()" class="py-3 rounded-xl bg-slate-200 dark:bg-slate-800 font-bold text-xs">
+              Terminer
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function copyReceiptToClipboard() {
+      const el = document.getElementById('receipt-copy-buffer');
+      if (!el) return;
+      el.classList.remove('sr-only');
+      el.select();
+      document.execCommand('copy');
+      el.classList.add('sr-only');
+      showToast('Reçu copié ! Prêt à coller dans WhatsApp ou SMS', 'success');
+    }
+
+    // ============================================================================
+    // VUE 2 : LISTE DES CLIENTS & HISTORIQUE GLOBAL
+    // ============================================================================
+    function renderClientsView(container) {
+      const filtered = db.clients.filter(c => {
+        const q = searchClientQuery.toLowerCase();
+        return c.plate.toLowerCase().includes(q) ||
+               c.name.toLowerCase().includes(q) ||
+               c.vehicle.toLowerCase().includes(q);
+      });
+
+      container.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-extrabold">Clients & Véhicules</h2>
+            <p class="text-xs text-slate-400">Suivi vidanges et historique complet</p>
+          </div>
+          <button onclick="openNewClientModal()" class="px-3.5 py-2 rounded-xl bg-cyan-600 text-white font-bold text-xs shadow-md shadow-cyan-600/20">
+            <i class="fa-solid fa-plus mr-1"></i> Client
+          </button>
+        </div>
+
+        <!-- Barre de recherche -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input type="text" value="${searchClientQuery}" oninput="searchClientQuery = this.value; renderCurrentRoute();"
+            placeholder="Rechercher par plaque, nom ou modèle..."
+            class="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slateDark-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-cyan-500" />
+        </div>
+
+        <!-- Liste des fiches -->
+        <div class="space-y-2.5">
+          ${filtered.length === 0
+            ? `<div class="text-center py-10 text-slate-400 text-xs">Aucun véhicule trouvé pour cette recherche.</div>`
+            : filtered.map(c => renderClientSummaryCard(c)).join('')}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // VUE 3 : SCANNER CODE-BARRES & QR CODE (ADMIN vs EMPLOYÉ)
+    // ============================================================================
+    function renderScanBarcodeView(container) {
+      const adminMode = isAdmin();
+
+      container.innerHTML = `
+        <!-- Bannière de rôle actif pour le scanner -->
+        <div class="p-3.5 rounded-2xl border ${adminMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-cyan-500/10 border-cyan-500/30'} flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl ${adminMode ? 'bg-amber-500 text-slate-950' : 'bg-cyan-500 text-white'} flex items-center justify-center text-base shrink-0">
+            <i class="fa-solid ${adminMode ? 'fa-shield-halved' : 'fa-eye'}"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-extrabold ${adminMode ? 'text-amber-500' : 'text-cyan-500'}">
+              ${adminMode ? 'Mode Admin : Ajout & Gestion Stock' : 'Mode Employé : Consultation des Prix'}
+            </h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-300 mt-0.5">
+              ${adminMode
+                ? 'Scannez un code-barres ou QR Code pour ajouter un produit ou modifier son prix/stock.'
+                : 'Scannez un produit en rayon pour afficher instantanément son prix de vente.'}
+            </p>
+          </div>
+        <!-- Caméra Scanner Code-Barres / QR (En veille au démarrage) -->
+        <div class="bg-white dark:bg-slateDark-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg">
+          <div class="relative h-52 bg-slate-950 flex items-center justify-center overflow-hidden">
+            <video id="barcode-camera-video" class="w-full h-full object-cover opacity-80" playsinline muted></video>
+            
+            <div id="barcode-camera-fallback" class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 flex flex-col items-center justify-center p-4 text-center z-10">
+              <i class="fa-solid fa-qrcode text-4xl text-cyan-400/75 mb-2"></i>
+              <p class="text-xs text-slate-200 font-bold">Lecteur Code-Barres & QR en veille</p>
+              <p class="text-[10px] text-slate-400 mt-0.5 mb-2.5">Appuyez ci-dessous pour activer la caméra</p>
+              <button onclick="startCameraInElement('barcode-camera-video', 'barcode-camera-fallback')" class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-video"></i>
+                <span>Activer la caméra</span>
+              </button>
+            </div>
+
+            <!-- Viseur carré QR/Barcode -->
+            <div class="w-48 h-32 border-2 border-cyan-400/40 rounded-2xl relative pointer-events-none flex items-center justify-center">
+              <div class="scanner-laser"></div>
+            </div>
+          </div>
+
+          <div class="p-4 space-y-3">
+            <button onclick="simulateBarcodeScan()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98 transition">
+              <i class="fa-solid fa-barcode text-base"></i>
+              <span>Simuler Scan Code-Barres / QR</span>
+            </button>
+
+            <!-- Saisie manuelle d'un code -->
+            <form onsubmit="handleManualBarcodeSubmit(event)" class="flex gap-2">
+              <input id="manual-barcode-input" type="text" placeholder="Saisir code-barres (ex: 6130001122334)" required
+                class="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs focus:outline-none focus:border-cyan-500" />
+              <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-bold text-xs">
+                Scanner
+              </button>
+            </form>
+
+            <!-- Codes de test rapides -->
+            <div class="pt-1">
+              <p class="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Tester avec un produit :</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="processScannedBarcode('6130001122334')" class="text-[10px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium">Filtre à Huile</button>
+                <button onclick="processScannedBarcode('3425901018012')" class="text-[10px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium">Huile Total 5W30</button>
+                <button onclick="processScannedBarcode('6130001122389')" class="text-[10px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium">Parfum Sapin</button>
+                <button onclick="processScannedBarcode('NEW-QR-' + Math.floor(1000 + Math.random()*9000))" class="text-[10px] px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 font-semibold">+ Nouveau Code QR</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function simulateBarcodeScan() {
+      const existingCodes = db.catalog.map(i => i.barcode);
+      const pool = [...existingCodes, 'NEW-PROD-' + Math.floor(100 + Math.random() * 899)];
+      const code = pool[Math.floor(Math.random() * pool.length)];
+      processScannedBarcode(code);
+    }
+
+    function handleManualBarcodeSubmit(e) {
+      e.preventDefault();
+      const val = document.getElementById('manual-barcode-input').value.trim();
+      if (val) processScannedBarcode(val);
+    }
+
+    function processScannedBarcode(code) {
+      const item = db.catalog.find(p => p.barcode.toLowerCase() === code.toLowerCase());
+
+      if (isAdmin()) {
+        // MODE ADMIN : Formulaire d'ajout ou d'édition pré-rempli avec le code scanné
+        openProductFormModal(item || { barcode: code, category: 'product' });
+      } else {
+        // MODE EMPLOYÉ : Consultation rapide du prix uniquement (lecture seule)
+        if (!item) {
+          openModal('Produit Non Référencé', `
+            <div class="text-center py-6 space-y-3">
+              <div class="w-14 h-14 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center text-2xl mx-auto">
+                <i class="fa-solid fa-box-open"></i>
+              </div>
+              <p class="font-bold text-sm">Code : <span class="font-mono text-cyan-500">${code}</span></p>
+              <p class="text-xs text-slate-400">Ce produit n'est pas encore enregistré dans le catalogue. Demandez à l'administrateur de l'ajouter.</p>
+            </div>
+          `);
+          return;
         }
 
-        // --- FACTURATION (DÉDUKTION DU STOCK RESTANT) ---
-        let billingCart = [];
-        let billingVehicleId = null;
+        openModal('Tarif Produit (Lecture Seule)', `
+          <div class="space-y-4">
+            <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/10 text-cyan-300">${item.barcode}</span>
+                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+                  ${item.category === 'oil' ? 'Huile Moteur' : item.category === 'service' ? 'Service' : 'Produit'}
+                </span>
+              </div>
+              <h4 class="text-lg font-extrabold pt-1">${item.name}</h4>
+              ${item.category === 'oil' ? `<p class="text-xs text-amber-400 font-semibold">${item.brand} • Viscosité ${item.viscosity} • ${item.capacity}</p>` : ''}
+              <div class="pt-3 border-t border-white/10 flex items-end justify-between">
+                <div>
+                  <p class="text-[10px] uppercase text-slate-400">Prix Client</p>
+                  <p class="text-2xl font-extrabold text-emerald-400">${formatPrice(item.price)}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] uppercase text-slate-400">Disponibilité</p>
+                  <p class="text-xs font-bold ${item.stock > 5 ? 'text-emerald-400' : 'text-amber-400'}">
+                    ${item.category === 'service' ? 'Disponible' : `${item.stock} en stock`}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button onclick="closeModal()" class="w-full py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 font-bold text-xs">Fermer</button>
+          </div>
+        `);
+      }
+    }
 
-        function quickInvoiceForVehicle(vehId) {
-            billingVehicleId = vehId;
-            billingCart = [];
-            appState.currentView = 'billing';
-            renderApp();
-        }
+    // ============================================================================
+    // VUE 4 : CATALOGUE SERVICES, PRODUITS & HUILES MOTEUR
+    // ============================================================================
+    function renderCatalogView(container) {
+      const adminMode = isAdmin();
+      const filteredItems = db.catalog.filter(item => {
+        const matchCat = catalogFilter === 'all' || item.category === catalogFilter;
+        const q = searchCatalogQuery.toLowerCase();
+        const matchQuery = item.name.toLowerCase().includes(q) ||
+                           (item.viscosity && item.viscosity.toLowerCase().includes(q)) ||
+                           (item.brand && item.brand.toLowerCase().includes(q));
+        return matchCat && matchQuery;
+      });
 
-        function renderBillingView() {
-            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+      container.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-extrabold">Services, Produits & Huiles</h2>
+            <p class="text-xs text-slate-400">Tarifs lavage, filtres et lubrifiants moteur</p>
+          </div>
+          ${adminMode ? `
+            <button onclick="openProductFormModal()" class="px-3.5 py-2 rounded-xl bg-cyan-600 text-white font-bold text-xs shadow-md shadow-cyan-600/20">
+              <i class="fa-solid fa-plus mr-1"></i> Ajouter
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- Filtres par catégorie -->
+        <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
+          ${[
+            { id: 'all', label: 'Tout' },
+            { id: 'service', label: '🧼 Lavage & Vidange' },
+            { id: 'oil', label: '🛢️ Huiles Moteur' },
+            { id: 'product', label: '🔧 Filtres & Prod.' }
+          ].map(tab => `
+            <button onclick="catalogFilter = '${tab.id}'; renderCurrentRoute();"
+              class="px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${catalogFilter === tab.id ? 'bg-cyan-600 text-white' : 'bg-white dark:bg-slateDark-900 text-slate-500 border border-slate-200 dark:border-slate-800'}">
+              ${tab.label}
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Recherche catalogue -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input type="text" value="${searchCatalogQuery}" oninput="searchCatalogQuery = this.value; renderCurrentRoute();"
+            placeholder="Rechercher un service, filtre, huile 5W30, Total..."
+            class="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slateDark-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-cyan-500" />
+        </div>
+
+        <!-- Grille / Liste des articles -->
+        <div class="space-y-2.5">
+          ${filteredItems.map(item => {
+            const isOil = item.category === 'oil';
+            const isService = item.category === 'service';
+            const badgeColor = isOil ? 'bg-amber-500/15 text-amber-500' : isService ? 'bg-cyan-500/15 text-cyan-500' : 'bg-purple-500/15 text-purple-400';
+            const icon = isOil ? 'fa-oil-can' : isService ? 'fa-soap' : 'fa-filter';
+
             return `
-                <div class="space-y-4">
-                    <h3 class="text-sm font-semibold text-white flex items-center">
-                        <i class="fa-solid fa-cash-register text-blue-500 mr-2"></i> Caisse & Facturation
-                    </h3>
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                        <label class="block text-xs font-medium text-slate-400">Véhicule concerné</label>
-                        <select id="billing-veh-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
-                            ${appState.vehicles.map(v => `<option value="${v.id}" ${billingVehicleId === v.id ? 'selected' : ''}>${v.plate} - ${v.model}</option>`).join('')}
-                        </select>
+              <div class="bg-white dark:bg-slateDark-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                <div class="flex items-start gap-3 min-w-0">
+                  <div class="w-10 h-10 rounded-xl ${badgeColor} flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fa-solid ${icon}"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <h4 class="font-bold text-xs truncate">${item.name}</h4>
                     </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Catalogue & Stocks Restants</h4>
-                        <div class="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
-                            ${appState.catalog.map(item => `
-                                <div class="flex justify-between items-center bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
-                                    <div>
-                                        <span class="text-xs font-medium text-white block">${item.name}</span>
-                                        <span class="text-[10px] text-blue-400 font-bold">${item.price.toLocaleString()} DA • Restant: <strong class="text-emerald-400">${item.stock}</strong></span>
-                                    </div>
-                                    <button onclick="addToBillingCart(${item.id})" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition border border-blue-500/30">
-                                        <i class="fa-solid fa-plus"></i> Ajouter
-                                    </button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Panier en cours</h4>
-                        ${billingCart.length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">Aucun article</p>` : `
-                            <div class="space-y-2">
-                                ${billingCart.map((item, idx) => `
-                                    <div class="flex justify-between items-center text-xs bg-slate-950 p-2 rounded-xl">
-                                        <span class="text-slate-200">${item.name} (x${item.qty})</span>
-                                        <span class="font-bold text-white">${(item.price * item.qty).toLocaleString()} DA</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-sm font-bold">
-                                <span class="text-white">Total :</span>
-                                <span class="text-emerald-400 text-base">${total.toLocaleString()} DA</span>
-                            </div>
-                            <button onclick="validateBilling()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition text-xs">
-                                Valider & Encaisser
-                            </button>
-                        `}
-                    </div>
+                    ${isOil ? `
+                      <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">${item.viscosity}</span>
+                        <span class="text-[10px] text-slate-400">${item.oilType} • ${item.capacity}</span>
+                      </div>
+                    ` : `
+                      <p class="text-[10px] text-slate-400 mt-0.5 font-mono">Code: ${item.barcode}</p>
+                    `}
+                    ${!isService ? `
+                      <p class="text-[10px] mt-1 ${item.stock <= 12 ? 'text-rose-500 font-bold' : 'text-slate-400'}">
+                        Stock : ${item.stock} ${item.unit || 'unités'} ${item.stock <= 12 ? '⚠️ Bas' : ''}
+                      </p>
+                    ` : ''}
+                  </div>
                 </div>
-            `;
-        }
 
-        function addToBillingCart(catalogId) {
-            const item = appState.catalog.find(c => c.id === catalogId);
-            if(!item) return;
-            if(item.stock <= 0) {
-                alert("Stock épuisé pour cet article !");
-                return;
-            }
-            const existing = billingCart.find(i => i.id === catalogId);
-            if(existing) existing.qty++; else billingCart.push({ ...item, qty: 1 });
-            renderApp();
-        }
-
-        function validateBilling() {
-            if(billingCart.length === 0) return;
-            const vehId = parseInt(document.getElementById('billing-veh-select').value);
-            const total = billingCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-
-            // Déduire les quantités des stocks restants
-            billingCart.forEach(cartItem => {
-                const catItem = appState.catalog.find(c => c.id === cartItem.id);
-                if(catItem) {
-                    catItem.stock = Math.max(0, catItem.stock - cartItem.qty);
-                }
-            });
-
-            appState.passages.unshift({
-                id: appState.passages.length + 1,
-                vehicleId: vehId,
-                date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-                totalAmount: total,
-                items: billingCart.map(i => `${i.name} (x${i.qty})`)
-            });
-            saveState();
-            billingCart = [];
-            alert("Paiement validé et stocks mis à jour avec succès !");
-            switchView('journal');
-        }
-
-        // --- JOURNAL ---
-        function renderJournalView() {
-            return `
-                <div class="space-y-4">
-                    <h3 class="text-sm font-semibold text-white">Journal des Encaissements</h3>
-                    <div class="space-y-3">
-                        ${appState.passages.map(p => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                                <div class="flex justify-between items-center text-xs">
-                                    <span class="text-blue-400 font-mono font-bold">Passage #${p.id}</span>
-                                    <span class="font-bold text-emerald-400">${p.totalAmount.toLocaleString()} DA</span>
-                                </div>
-                                <div class="text-xs text-slate-300">
-                                    ${p.items.join(', ')}
-                                </div>
-                                <div class="text-[10px] text-slate-500 text-right">${p.date}</div>
-                            </div>
-                        `).join('')}
+                <div class="flex flex-col items-end gap-1.5 shrink-0">
+                  <span class="text-sm font-extrabold text-emerald-500">${formatPrice(item.price)}</span>
+                  ${adminMode ? `
+                    <div class="flex items-center gap-1">
+                      ${!isService ? `
+                        <button onclick="quickRestockItem('${item.id}')" title="Ajouter +5 au stock" class="px-1.5 h-7 rounded-lg bg-emerald-500/15 text-emerald-500 text-[10px] font-extrabold flex items-center justify-center">
+                          +5
+                        </button>
+                      ` : ''}
+                      <button onclick="editCatalogItem('${item.id}')" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-cyan-500 text-xs flex items-center justify-center">
+                        <i class="fa-solid fa-pen"></i>
+                      </button>
+                      <button onclick="deleteCatalogItem('${item.id}')" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-rose-500 text-xs flex items-center justify-center">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
                     </div>
+                  ` : ''}
                 </div>
+              </div>
             `;
-        }
+          }).join('')}
+        </div>
+      `;
+    }
 
-        // --- ADMIN & GESTION DES STOCKS ---
-        function renderAdminView() {
-            if(appState.currentUser.role !== 'admin') return `<div class="text-center py-12 text-rose-400">Accès restreint.</div>`;
-            return `
-                <div class="space-y-4">
-                    <h3 class="text-sm font-semibold text-white flex items-center">
-                        <i class="fa-solid fa-shield-halved text-amber-500 mr-2"></i> Espace Administrateur
-                    </h3>
-                    <div class="flex space-x-2 border-b border-slate-800 pb-2">
-                        <button onclick="setAdminTab('users')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='users'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Équipe</button>
-                        <button onclick="setAdminTab('catalog')" class="px-3 py-1.5 rounded-xl text-xs font-medium ${appState.adminTab==='catalog'?'bg-blue-600 text-white':'text-slate-400 bg-slate-900'}">Tarifs & Stocks</button>
-                    </div>
-                    ${appState.adminTab === 'users' ? renderUsersAdminSection() : renderCatalogAdminSection()}
+    function quickRestockItem(id) {
+      const item = db.catalog.find(i => i.id === id);
+      if (!item) return;
+      item.stock += 5;
+      saveDB();
+      showToast(`+5 ajoutés au stock de "${item.name}" (Total : ${item.stock})`, 'success');
+      renderCurrentRoute();
+    }
+
+    function editCatalogItem(id) {
+      const item = db.catalog.find(i => i.id === id);
+      if (item) openProductFormModal(item);
+    }
+
+    function deleteCatalogItem(id) {
+      db.catalog = db.catalog.filter(i => i.id !== id);
+      saveDB();
+      showToast('Élément supprimé du catalogue', 'warning');
+      renderCurrentRoute();
+    }
+
+    function openProductFormModal(prefill = {}) {
+      const isEdit = Boolean(prefill.id);
+      const cat = prefill.category || 'product';
+
+      openModal(isEdit ? 'Modifier Article' : 'Ajouter Service / Produit / Huile', `
+        <form onsubmit="saveCatalogItem(event, '${prefill.id || ''}')" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Type d'élément *</label>
+            <select id="prod-cat-select" name="category" onchange="toggleOilFields(this.value)" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+              <option value="service" ${cat === 'service' ? 'selected' : ''}>🧼 Service Lavage / Entretien</option>
+              <option value="product" ${cat === 'product' ? 'selected' : ''}>🔧 Produit / Filtre / Accessoire</option>
+              <option value="oil" ${cat === 'oil' ? 'selected' : ''}>🛢️ Huile Moteur</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold mb-1">Désignation *</label>
+            <input type="text" name="name" value="${prefill.name || ''}" required placeholder="Ex: Lavage Céramique ou Huile 5W30"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+          </div>
+
+          <!-- Champs spécifiques Huile Moteur -->
+          <div id="oil-specific-fields" class="${cat === 'oil' ? 'grid' : 'hidden'} grid-cols-3 gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <div>
+              <label class="block text-[10px] font-bold text-amber-500 mb-1">Marque</label>
+              <input type="text" name="brand" value="${prefill.brand || 'Total Quartz'}" class="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-700 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-amber-500 mb-1">Viscosité</label>
+              <input type="text" name="viscosity" value="${prefill.viscosity || '5W30'}" class="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-700 text-xs font-bold" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-amber-500 mb-1">Contenance</label>
+              <input type="text" name="capacity" value="${prefill.capacity || '5L'}" class="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-700 text-xs" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold mb-1">Prix de Vente (${db.currency}) *</label>
+              <input type="number" name="price" value="${prefill.price || ''}" required min="0"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm font-bold text-emerald-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Stock disponible</label>
+              <input type="number" name="stock" value="${prefill.stock !== undefined ? prefill.stock : 20}" min="0"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold mb-1">Code-Barres / QR Code</label>
+            <input type="text" name="barcode" value="${prefill.barcode || 'PRD-' + Math.floor(10000 + Math.random()*90000)}"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs" />
+          </div>
+
+          <button type="submit" class="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg">
+            ${isEdit ? 'Mettre à jour' : 'Enregistrer dans le catalogue'}
+          </button>
+        </form>
+      `);
+    }
+
+    function toggleOilFields(val) {
+      const box = document.getElementById('oil-specific-fields');
+      if (!box) return;
+      if (val === 'oil') {
+        box.classList.remove('hidden');
+        box.classList.add('grid');
+      } else {
+        box.classList.add('hidden');
+        box.classList.remove('grid');
+      }
+    }
+
+    function saveCatalogItem(e, existingId) {
+      e.preventDefault();
+      const f = e.target;
+      const category = f.category.value;
+      const payload = {
+        id: existingId || 'cat_' + Date.now(),
+        category,
+        name: f.name.value.trim(),
+        price: parseFloat(f.price.value) || 0,
+        stock: category === 'service' ? 999 : (parseInt(f.stock.value, 10) || 0),
+        barcode: f.barcode.value.trim(),
+        unit: category === 'service' ? 'Prestation' : 'Unité',
+        brand: f.brand ? f.brand.value.trim() : '',
+        viscosity: f.viscosity ? f.viscosity.value.trim() : '',
+        capacity: f.capacity ? f.capacity.value.trim() : '',
+        oilType: 'Synthétique'
+      };
+
+      if (existingId) {
+        const idx = db.catalog.findIndex(i => i.id === existingId);
+        if (idx !== -1) db.catalog[idx] = { ...db.catalog[idx], ...payload };
+        showToast('Article mis à jour avec succès', 'success');
+      } else {
+        db.catalog.unshift(payload);
+        showToast('Nouvel article ajouté au catalogue', 'success');
+      }
+
+      saveDB();
+      closeModal();
+      renderCurrentRoute();
+    }
+
+    // ============================================================================
+    // VUE 5 : FINANCES (RECETTES & DÉPENSES JOUR / MOIS / ANNÉE) + GESTION USERS
+    // ============================================================================
+    function renderAdminFinanceView(container) {
+      if (!isAdmin()) {
+        const u = getActiveUser();
+        container.innerHTML = `
+          <div class="bg-white dark:bg-slateDark-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
+            <div class="w-16 h-16 rounded-2xl bg-cyan-500/15 text-cyan-500 flex items-center justify-center text-2xl mx-auto">
+              <i class="fa-solid fa-user-check"></i>
+            </div>
+            <div>
+              <h2 class="text-lg font-extrabold">${u.name}</h2>
+              <p class="text-xs text-cyan-500 font-bold uppercase mt-0.5">Compte Employé / Lavagiste</p>
+              <p class="text-[11px] text-slate-400 font-mono mt-1">${u.login}</p>
+            </div>
+            <div class="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 text-left text-xs space-y-1.5">
+              <p class="font-bold text-slate-300">Permissions actives :</p>
+              <p class="text-emerald-500"><i class="fa-solid fa-check mr-1.5"></i>Scan plaques d'immatriculation (DZ / EU / INTL)</p>
+              <p class="text-emerald-500"><i class="fa-solid fa-check mr-1.5"></i>Suivi et modification kilométrage vidange</p>
+              <p class="text-emerald-500"><i class="fa-solid fa-check mr-1.5"></i>Consultation des prix par scan code-barres/QR</p>
+              <p class="text-rose-400"><i class="fa-solid fa-lock mr-1.5"></i>Finances et gestion des utilisateurs réservées Admin</p>
+            </div>
+            <button onclick="logoutUser()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-2">
+              <i class="fa-solid fa-right-from-bracket"></i>
+              <span>Se déconnecter pour changer de compte</span>
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      // Filtrage temporel : Jour / Mois / Année
+      const currentYear = now.getFullYear().toString();
+      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+
+      const filteredTx = db.transactions.filter(t => {
+        if (financePeriod === 'day') return t.date === todayISO;
+        if (financePeriod === 'month') return t.date.startsWith(currentMonth);
+        return t.date.startsWith(currentYear);
+      });
+
+      const income = filteredTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const expense = filteredTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      const net = income - expense;
+      const maxBar = Math.max(income, expense, 1);
+
+      container.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-extrabold">Finances & Administration</h2>
+            <p class="text-xs text-slate-400">Recettes, dépenses & équipe AZ-LAVAGE</p>
+          </div>
+          <button onclick="openAddExpenseModal()" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/20">
+            <i class="fa-solid fa-minus-circle mr-1"></i> Dépense
+          </button>
+        </div>
+
+        <!-- Sélecteur Période : Jour / Mois / Année -->
+        <div class="grid grid-cols-3 gap-1.5 bg-slate-200/70 dark:bg-slateDark-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
+          ${[
+            { id: 'day', label: 'Aujourd\'hui' },
+            { id: 'month', label: 'Ce Mois' },
+            { id: 'year', label: 'Cette Année' }
+          ].map(p => `
+            <button onclick="financePeriod = '${p.id}'; renderCurrentRoute();"
+              class="py-2 rounded-xl text-xs font-extrabold transition ${financePeriod === p.id ? 'bg-cyan-600 text-white shadow' : 'text-slate-500 dark:text-slate-400'}">
+              ${p.label}
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Cartes KPIs Financiers -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-white dark:bg-slateDark-900 p-3 rounded-2xl border border-emerald-500/30">
+            <p class="text-[10px] font-bold uppercase text-slate-400">Recettes</p>
+            <p class="text-xs sm:text-sm font-extrabold text-emerald-500 mt-1">+${formatPrice(income)}</p>
+          </div>
+          <div class="bg-white dark:bg-slateDark-900 p-3 rounded-2xl border border-rose-500/30">
+            <p class="text-[10px] font-bold uppercase text-slate-400">Dépenses</p>
+            <p class="text-xs sm:text-sm font-extrabold text-rose-500 mt-1">-${formatPrice(expense)}</p>
+          </div>
+          <div class="bg-white dark:bg-slateDark-900 p-3 rounded-2xl border border-cyan-500/30">
+            <p class="text-[10px] font-bold uppercase text-slate-400">Bénéfice Net</p>
+            <p class="text-xs sm:text-sm font-extrabold ${net >= 0 ? 'text-cyan-500' : 'text-rose-500'} mt-1">${formatPrice(net)}</p>
+          </div>
+        </div>
+
+        <!-- Graphique Comparatif Visuel -->
+        <div class="bg-white dark:bg-slateDark-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Balance Recettes vs Dépenses</h3>
+          <div class="space-y-2.5">
+            <div>
+              <div class="flex justify-between text-xs font-bold mb-1">
+                <span class="text-emerald-500">Recettes Encaissées</span>
+                <span>${formatPrice(income)}</span>
+              </div>
+              <div class="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: ${Math.round((income / maxBar) * 100)}%"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs font-bold mb-1">
+                <span class="text-rose-500">Dépenses & Charges</span>
+                <span>${formatPrice(expense)}</span>
+              </div>
+              <div class="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-rose-500 rounded-full transition-all duration-500" style="width: ${Math.round((expense / maxBar) * 100)}%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Journal des Opérations de la Période -->
+        <div class="bg-white dark:bg-slateDark-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2.5">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Opérations (${filteredTx.length})</h3>
+          <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+            ${filteredTx.length === 0 ? `<p class="text-xs text-slate-500 italic">Aucune opération sur cette période.</p>` : ''}
+            ${filteredTx.map(t => `
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs">
+                <div class="min-w-0 pr-2">
+                  <p class="font-bold truncate">${t.label}</p>
+                  <p class="text-[10px] text-slate-400">${t.date} • ${t.category}</p>
                 </div>
-            `;
-        }
+                <span class="font-extrabold whitespace-nowrap ${t.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}">
+                  ${t.type === 'income' ? '+' : '-'}${formatPrice(t.amount)}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
 
-        function setAdminTab(tab) { appState.adminTab = tab; renderApp(); }
+        <!-- Gestion des Utilisateurs (Admin & Employés) -->
+        <div class="bg-white dark:bg-slateDark-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-amber-500">
+              <i class="fa-solid fa-users-gear mr-1"></i> Gestion des Utilisateurs
+            </h3>
+            <button onclick="openUserFormModal()" class="text-xs font-bold text-cyan-500 hover:underline">
+              + Ajouter Utilisateur
+            </button>
+          </div>
 
-        function renderUsersAdminSection() {
-            return `
-                <div class="space-y-4">
-                    <div class="space-y-2">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Membres de l'équipe</h4>
-                        ${appState.users.map(u => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
-                                <div>
-                                    <h5 class="text-xs font-bold text-white">${u.name}</h5>
-                                    <p class="text-[10px] text-slate-400">ID: ${u.username} • Rôle: ${u.role}</p>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
+          <div class="space-y-2">
+            ${db.users.map(u => `
+              <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                <div class="min-w-0 pr-2">
+                  <p class="text-xs font-bold flex items-center gap-1.5 flex-wrap">
+                    <span class="truncate">${u.name}</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-extrabold ${u.role === 'admin' ? 'bg-amber-500/20 text-amber-500' : 'bg-cyan-500/20 text-cyan-500'}">
+                      ${u.role === 'admin' ? 'Admin' : 'Employé'}
+                    </span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-extrabold ${u.active !== false ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}">
+                      ${u.active !== false ? 'Actif' : 'Inactif'}
+                    </span>
+                  </p>
+                  <p class="text-[10px] text-cyan-500 font-mono mt-0.5 truncate"><i class="fa-solid fa-envelope mr-1"></i>${u.login}</p>
+                  <p class="text-[10px] text-slate-400">${u.phone || 'Tél non renseigné'}</p>
                 </div>
-            `;
-        }
-
-        function renderCatalogAdminSection() {
-            return `
-                <div class="space-y-4">
-                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Ajouter un produit / service</h4>
-                        <form onsubmit="addNewCatalogItem(event)" class="space-y-3">
-                            <input type="text" id="cat-name" required placeholder="Nom (ex: Filtre à Huile)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
-                            <div class="grid grid-cols-3 gap-2">
-                                <select id="cat-category" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
-                                    <option value="LAVAGE">Lavage</option>
-                                    <option value="VIDANGE">Vidange</option>
-                                    <option value="FILTRE">Filtre</option>
-                                    <option value="ACCESSOIRE">Accessoire</option>
-                                </select>
-                                <input type="number" id="cat-price" required placeholder="Prix (DA)" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
-                                <input type="number" id="cat-stock" required placeholder="Stock" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
-                            </div>
-                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2.5 rounded-xl transition">Ajouter au catalogue</button>
-                        </form>
-                    </div>
-
-                    <div class="space-y-2">
-                        <h4 class="text-xs font-semibold text-slate-400 uppercase">Modifier les prix et stocks restants</h4>
-                        ${appState.catalog.map(item => `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
-                                <div>
-                                    <h5 class="text-xs font-bold text-white">${item.name}</h5>
-                                    <span class="text-[10px] text-slate-400">${item.category}</span>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <input type="number" value="${item.price}" onchange="updateCatalogPrice(${item.id}, this.value)" class="w-20 bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Prix (DA)">
-                                    <input type="number" value="${item.stock}" onchange="updateCatalogStock(${item.id}, this.value)" class="w-16 bg-slate-950 border border-slate-800 text-xs text-blue-400 font-bold rounded-lg px-2 py-1.5 text-right" title="Stock restant">
-                                    <button onclick="deleteCatalogItem(${item.id})" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash text-xs"></i></button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button onclick="openUserFormModal('${u.id}')" class="w-7 h-7 rounded-lg bg-white dark:bg-slate-900 text-cyan-500 text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                    <i class="fa-solid fa-pen"></i>
+                  </button>
+                  ${db.users.length > 1 ? `
+                    <button onclick="deleteUser('${u.id}')" class="w-7 h-7 rounded-lg bg-white dark:bg-slate-900 text-rose-500 text-xs flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  ` : ''}
                 </div>
-            `;
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function openAddExpenseModal() {
+      openModal('Enregistrer une Dépense', `
+        <form onsubmit="submitNewExpense(event)" class="space-y-3.5">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Libellé de la dépense *</label>
+            <input type="text" name="label" required placeholder="Ex: Achat bidons shampooing, Facture eau..."
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold mb-1">Montant (${db.currency}) *</label>
+              <input type="number" name="amount" required min="1" placeholder="2500"
+                class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm font-bold text-rose-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Catégorie</label>
+              <select name="category" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+                <option value="Produits Lavage">Produits Lavage</option>
+                <option value="Stock Huiles/Filtres">Stock Huiles/Filtres</option>
+                <option value="Eau & Électricité">Eau & Électricité</option>
+                <option value="Salaires">Salaires</option>
+                <option value="Maintenance">Maintenance</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Date</label>
+            <input type="date" name="date" value="${todayISO}" required
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs" />
+          </div>
+          <button type="submit" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg">
+            Enregistrer la dépense
+          </button>
+        </form>
+      `);
+    }
+
+    function submitNewExpense(e) {
+      e.preventDefault();
+      const f = e.target;
+      db.transactions.unshift({
+        id: 'exp_' + Date.now(),
+        type: 'expense',
+        date: f.date.value,
+        label: f.label.value.trim(),
+        amount: parseFloat(f.amount.value) || 0,
+        category: f.category.value
+      });
+      saveDB();
+      closeModal();
+      showToast('Dépense enregistrée dans la comptabilité', 'info');
+      renderCurrentRoute();
+    }
+
+    function openUserFormModal(userId = '') {
+      const user = db.users.find(u => u.id === userId) || {};
+      const isEdit = Boolean(user.id);
+
+      openModal(isEdit ? 'Modifier Utilisateur' : 'Nouvel Utilisateur', `
+        <form onsubmit="saveUser(event, '${user.id || ''}')" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Nom & Prénom *</label>
+            <input type="text" name="name" value="${user.name || ''}" required placeholder="Ex: Samir (Lavagiste)"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-semibold mb-1">Rôle & Permissions *</label>
+              <select name="role" class="w-full px-2.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+                <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>🧼 Employé / Lavagiste</option>
+                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>👑 Administrateur</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Statut du compte</label>
+              <select name="active" class="w-full px-2.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+                <option value="true" ${user.active !== false ? 'selected' : ''}>✅ Actif</option>
+                <option value="false" ${user.active === false ? 'selected' : ''}>⛔ Inactif</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Identifiant de connexion (Email ou Pseudo) *</label>
+            <input type="text" name="login" value="${user.login || ''}" required placeholder="Ex: samir@az-lavage.dz"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Mot de passe *</label>
+            <input type="text" name="password" value="${user.password || ''}" required placeholder="Ex: lavage123"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Téléphone</label>
+            <input type="tel" name="phone" value="${user.phone || ''}" placeholder="0550 00 00 00"
+              class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm" />
+          </div>
+          <button type="submit" class="w-full py-3 rounded-xl bg-cyan-600 text-white font-bold text-xs shadow-lg">
+            ${isEdit ? 'Enregistrer modifications' : 'Créer l\'utilisateur'}
+          </button>
+        </form>
+      `);
+    }
+
+    function saveUser(e, userId) {
+      e.preventDefault();
+      const f = e.target;
+      const loginVal = f.login.value.trim().toLowerCase();
+      const duplicate = db.users.find(u => u.login.toLowerCase() === loginVal && u.id !== userId);
+      if (duplicate) {
+        showToast('Cet identifiant de connexion est déjà utilisé', 'error');
+        return;
+      }
+
+      const isActive = f.active.value === 'true';
+
+      if (userId) {
+        const u = db.users.find(item => item.id === userId);
+        if (u) {
+          u.name = f.name.value.trim();
+          u.role = f.role.value;
+          u.login = loginVal;
+          u.password = f.password.value;
+          u.phone = f.phone.value.trim();
+          u.active = isActive;
         }
+        showToast('Utilisateur mis à jour', 'success');
+      } else {
+        db.users.push({
+          id: 'u_' + Date.now(),
+          name: f.name.value.trim(),
+          role: f.role.value,
+          login: loginVal,
+          password: f.password.value,
+          phone: f.phone.value.trim(),
+          active: isActive
+        });
+        showToast('Nouvel utilisateur créé (connexion immédiate possible)', 'success');
+      }
+      saveDB();
+      renderHeaderUserInfo();
+      closeModal();
+      renderCurrentRoute();
+    }
 
-        function updateCatalogPrice(itemId, newPrice) {
-            const item = appState.catalog.find(c => c.id === itemId);
-            if(item) { item.price = parseFloat(newPrice) || 0; saveState(); }
-        }
+    function deleteUser(userId) {
+      if (db.activeUserId === userId) {
+        showToast('Impossible de supprimer l\'utilisateur actif', 'error');
+        return;
+      }
+      db.users = db.users.filter(u => u.id !== userId);
+      saveDB();
+      closeModal();
+      showToast('Utilisateur supprimé', 'warning');
+      renderCurrentRoute();
+    }
 
-        function updateCatalogStock(itemId, newStock) {
-            const item = appState.catalog.find(c => c.id === itemId);
-            if(item) { item.stock = parseInt(newStock) || 0; saveState(); }
-        }
+    // ============================================================================
+    // INITIALISATION AU CHARGEMENT (VÉRIFICATION SESSION OU AFFICHAGE LOGIN)
+    // ============================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      const rememberedUserId = localStorage.getItem(SESSION_KEY) || db.activeUserId;
+      const validUser = rememberedUserId ? db.users.find(u => u.id === rememberedUserId && u.active !== false) : null;
 
-        function addNewCatalogItem(e) {
-            e.preventDefault();
-            const name = document.getElementById('cat-name').value.trim();
-            const category = document.getElementById('cat-category').value;
-            const price = parseFloat(document.getElementById('cat-price').value);
-            const stock = parseInt(document.getElementById('cat-stock').value) || 0;
-
-            appState.catalog.push({ id: appState.catalog.length + 1, name, category, price, stock });
-            saveState();
-            renderApp();
-        }
-
-        function deleteCatalogItem(itemId) {
-            appState.catalog = appState.catalog.filter(c => c.id !== itemId);
-            saveState();
-            renderApp();
-        }
-
-        function openNewClientModal() {
-            const name = prompt("Nom complet du client :");
-            if(!name) return;
-            const phone = prompt("Numéro de téléphone :", "+213 ");
-            if(!phone) return;
-            const plate = prompt("Plaque d'immatriculation (ex: 12456-124-16) :").toUpperCase();
-            if(!plate) return;
-            const model = prompt("Modèle du véhicule :") || "Véhicule";
-            const mileageInput = prompt("Kilométrage actuel :", "0");
-            const mileage = parseInt(mileageInput) || 0;
-
-            const newClientId = appState.clients.length + 1;
-            appState.clients.push({ id: newClientId, name, phone, totalSpent: 0 });
-            const newVehId = appState.vehicles.length + 1;
-            appState.vehicles.push({ id: newVehId, clientId: newClientId, plate, model, mileage, country: 'DZ' });
-            saveState();
-            renderApp();
-            openVehicleDetail(newVehId);
-        }
-
-        window.onload = function() {
-            if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
-                location.replace('https://' + location.host + location.pathname + location.search + location.hash);
-                return;
-            }
-            renderApp();
-        };
-    </script>
+      if (validUser) {
+        db.activeUserId = validUser.id;
+        saveDB();
+        enterAuthenticatedApp(validUser);
+      } else {
+        db.activeUserId = null;
+        saveDB();
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('authenticated-shell').classList.add('hidden');
+      }
+    });
+  </script>
 </body>
 </html>
